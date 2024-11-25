@@ -38,6 +38,3 @@ class PersonCategory(models.Model):
     class Meta:
         verbose_name_plural = "person categories"
         unique_together = ['person', 'category']
-
-    def __str__(self):
-        return f"{self.person} - {self.category}"
