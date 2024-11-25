@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class Category(models.Model):
@@ -38,3 +39,37 @@ class PersonCategory(models.Model):
     class Meta:
         verbose_name_plural = "person categories"
         unique_together = ['person', 'category']
+
+
+class Task(models.Model):
+    name = models.CharField(max_length=64)
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.name} - {self.description}'
+
+
+class TaskStatus(models.Model):
+    is_done = models.BooleanField(default=False)
+    done_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "task statuses"
+
+    def mark_as_done(self):
+        self.is_done = True
+        self.done_at = timezone.now()
+        self.save()
+
+
+class TaskPerson(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    task_status = models.ForeignKey(TaskStatus, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name_plural = "task assignments"
+        unique_together = ['task', 'person']
