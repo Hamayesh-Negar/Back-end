@@ -85,4 +85,7 @@ local_settings.py
 
 .env
 .idea/
+**/migrations/**
+!**/migrations
+!**/migrations/__init__.py
 db.sqlite3
