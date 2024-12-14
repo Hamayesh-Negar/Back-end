@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 
+from conference.models import Conference
+
 
 class Category(models.Model):
     name = models.CharField(max_length=75)
@@ -16,6 +18,7 @@ class Category(models.Model):
 
 
 class Person(models.Model):
+    conference = models.ForeignKey(Conference, on_delete=models.CASCADE)
     unique_code = models.CharField(max_length=255, unique=True)
     hashed_unique_code = models.TextField()
     first_name = models.CharField(max_length=64)
