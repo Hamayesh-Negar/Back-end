@@ -1,0 +1,51 @@
+.progress {
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    height: 20px;
+    margin-bottom: 0;
+}
+
+.progress-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    transition: width .6s ease;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.4em;
+    font-size: 85%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    margin: 0 2px;
+}
+
+.badge-info {
+    color: #fff;
+    background-color: #17a2b8;
+}
+
+.badge-secondary {
+    color: #fff;
+    background-color: #6c757d;
+}
+
+.bg-success {
+    background-color: #28a745!important;
+}
+
+.bg-warning {
+    background-color: #ffc107!important;
+}
+
+.bg-danger {
+    background-color: #dc3545!important;
+}
