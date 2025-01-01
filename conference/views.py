@@ -42,13 +42,13 @@ class ConferenceViewSet(ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        if not request.user.is_superuser or not request.user.is_hamayesh_manager:
+        if not request.user.is_superuser or request.user.is_hamayesh_manager:
             return Response({'detail': 'You do not have permission to perform this action.'},
                             status=403)
-        return super().create(request, *args, **kwargs)
+        return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         if not request.user.is_superuser:
             return Response({'detail': 'You do not have permission to perform this action.'},
                             status=403)
-        return super().create(request, *args, **kwargs)
+        return super().destroy(request, *args, **kwargs)
