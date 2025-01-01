@@ -1,12 +1,9 @@
 from rest_framework.serializers import ModelSerializer
 
 from conference.models import Conference
-from user.serializers import UserSerializer
 
 
 class ConferenceSerializer(ModelSerializer):
-    created_by = UserSerializer(read_only=True)
-
     class Meta:
         model = Conference
         fields = ['id', 'name', 'description', 'start_date',
