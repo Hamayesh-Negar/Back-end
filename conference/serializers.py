@@ -13,6 +13,14 @@ class ConferenceSerializer(ModelSerializer):
                   'end_date', 'is_active', 'created_by', 'days_duration']
         read_only_fields = ['created_at', 'updated_at', 'created_by']
 
+    def validate(self, data):
+        if data.get('start_date') and data.get('end_date'):
+            if data['start_date'] > data['end_date']:
+                raise serializers.ValidationError({
+                    "end_date": "End date must be after start date"
+                })
+        return data
+
     def create(self, validated_data):
         validated_data['created_by'] = self.context['request'].user
         return super().create(validated_data)
