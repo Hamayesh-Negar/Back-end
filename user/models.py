@@ -52,7 +52,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(
         max_length=20,
         unique=True,
-        default='+000000000000',
         help_text='Phone number, format: +980123456789',
         validators=[
             RegexValidator(
