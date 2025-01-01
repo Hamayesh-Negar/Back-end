@@ -16,3 +16,10 @@ class PersonViewSet(ModelViewSet):
     filtetset_fields = ['is_active']
     search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        conference_id = self.request.query_params.get('conference_id', None)
+        if conference_id:
+            queryset = queryset.filter(conference_id=conference_id)
+        return queryset
