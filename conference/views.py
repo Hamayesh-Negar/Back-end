@@ -28,3 +28,21 @@ class ConferenceViewSet(ModelViewSet):
             'total_categories': conference.categories.count(),
         }
         return Response(sets)
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'detail': 'You do not have permission to perform this action.'},
+                            status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_superuser or not request.user.is_hamayesh_manager:
+            return Response({'detail': 'You do not have permission to perform this action.'},
+                            status=403)
+        return super().create(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'detail': 'You do not have permission to perform this action.'},
+                            status=403)
+        return super().create(request, *args, **kwargs)
