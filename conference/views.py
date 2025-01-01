@@ -7,17 +7,23 @@ from rest_framework.viewsets import ModelViewSet
 
 from conference.models import Conference
 from conference.serializers import ConferenceSerializer
-from user.permissions import IsHamayeshManager, IsSuperuser
+from user.permissions import CanEditAllFields, CanEditBasicFields
 
 
 class ConferenceViewSet(ModelViewSet):
     queryset = Conference.objects.all()
     serializer_class = ConferenceSerializer
-    permission_classes = [IsAuthenticated, IsSuperuser, IsHamayeshManager]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
     search_fields = ['name', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['start_date', 'end_date']
+
+    def get_permissions(self):
+        if self.request.user.has_perm('conference.edit_all_fields'):
+            permission_classes = [IsAuthenticated, CanEditAllFields]
+        else:
+            permission_classes = [IsAuthenticated, CanEditBasicFields]
+        return [permission() for permission in permission_classes]
 
     @action(detail=True, methods=['get'])
     def statistics(self, request, pk=None):

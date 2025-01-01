@@ -21,3 +21,29 @@ class IsSuperuser(BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return request.user.is_superuser
+
+
+class CanEditBasicFields(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        if request.method in ['PUT', 'PATCH']:
+            allowed_fields = {'name', 'description'}
+            request_data = set(request.data.keys())
+            return not (request_data - allowed_fields)
+
+        return False
+
+
+class CanEditAllFields(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        return True

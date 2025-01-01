@@ -14,6 +14,9 @@ class Conference(models.Model):
     class Meta:
         verbose_name_plural = "conferences"
         ordering = ['-start_date']
+        permissions = [
+            ("edit_all_fields", "Can edit all conference fields"),
+        ]
 
     def __str__(self):
         return self.name
