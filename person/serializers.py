@@ -8,8 +8,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['id', 'conference', 'name', 'description', 'members_count', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
+        fields = ['id', 'conference', 'name', 'description', 'members_count']
 
     @staticmethod
     def get_members_count(obj):
@@ -28,14 +27,14 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class PersonSerializer(serializers.ModelSerializer):
-    # categories = CategorySerializer(many=True, read_only=False)
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
 
     class Meta:
         model = Person
         fields = ['id', 'conference', 'categories', 'first_name',
-                  'last_name', 'unique_code', 'email', 'telephone',
-                  'is_active', 'registered_by', 'created_at', 'updated_at']
-        read_only_fields = ['registered_by', 'created_at', 'updated_at']
+                  'last_name', 'full_name', 'unique_code', 'hashed_unique_code', 'email', 'telephone',
+                  'is_active', 'registered_by']
+        read_only_fields = ['registered_by', 'hashed_unique_code']
 
     def create(self, validated_data):
         categories = validated_data.pop('categories', [])
@@ -50,3 +49,11 @@ class PersonSerializer(serializers.ModelSerializer):
         if request.user.is_hamayesh_yar:
             representation.pop('is_active', None)
         return representation
+
+    def validate_unique_code(self, value):
+        if value:
+            if Person.objects.filter(
+                    unique_code=value
+            ).exclude(id=self.instance.id if self.instance else None).exists():
+                raise serializers.ValidationError("This unique code is already in use.")
+        return value
