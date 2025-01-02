@@ -7,6 +7,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from conference.models import Conference
 from conference.serializers import ConferenceSerializer
+from person.serializers import CategorySerializer
 from user.permissions import CanEditAllFields, CanEditBasicFields
 
 
@@ -17,6 +18,19 @@ class ConferenceViewSet(ModelViewSet):
     filtetset_fields = ['is_active']
     search_fields = ['name', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['start_date', 'end_date']
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        queryset = self.get_queryset().filter(is_active=True)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def categories(self, request, pk=None):
+        conference = self.get_object()
+        categories = conference.categories
+        serializer = CategorySerializer(categories, many=True)
+        return Response(serializer.data)
 
     def get_permissions(self):
         if self.request.user.has_perm('conference.edit_all_fields'):
