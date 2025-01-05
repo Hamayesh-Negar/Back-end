@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from person.models import Person, Category, PersonTask
+from person.models import Person, Category, PersonTask, Task
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -79,3 +79,12 @@ class PersonSerializer(serializers.ModelSerializer):
     @staticmethod
     def get_completed_task_count(obj):
         return obj.tasks.filter(status=PersonTask.COMPLETED).count()
+
+    class TaskSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = Task
+            fields = [
+                'id', 'conference', 'name', 'description', 'is_required',
+                'is_active', 'due_date', 'created_at', 'updated_at'
+            ]
+            read_only_fields = ['created_at', 'updated_at']
