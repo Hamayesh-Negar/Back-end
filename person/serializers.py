@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from person.models import Person, Category, PersonTask, Task
@@ -81,10 +82,17 @@ class PersonSerializer(serializers.ModelSerializer):
         return obj.tasks.filter(status=PersonTask.COMPLETED).count()
 
     class TaskSerializer(serializers.ModelSerializer):
+        assignment_count = serializers.SerializerMethodField()
+
         class Meta:
             model = Task
             fields = [
                 'id', 'conference', 'name', 'description', 'is_required',
-                'is_active', 'due_date', 'created_at', 'updated_at'
+                'is_active', 'due_date', 'assignment_count',
+                'created_at', 'updated_at'
             ]
             read_only_fields = ['created_at', 'updated_at']
+
+        @staticmethod
+        def get_assignment_count(obj):
+            return obj.assignments.count()
