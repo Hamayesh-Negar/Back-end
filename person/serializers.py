@@ -60,6 +60,18 @@ class PersonSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("This unique code is already in use.")
         return value
 
+    def validate(self, data):
+        if 'categories' in data and 'conference' in data:
+            invalid_categories = [
+                cat for cat in data['categories']
+                if cat.conference_id != data['conference'].id
+            ]
+            if invalid_categories:
+                raise serializers.ValidationError({
+                    'categories': 'All categories must belong to the same conference'
+                })
+        return data
+
     @staticmethod
     def get_task_count(obj):
         return obj.tasks.count()
