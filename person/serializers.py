@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from person.models import Person, Category
+from person.models import Person, Category, PersonTask
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -28,12 +28,14 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class PersonSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name', read_only=True)
+    task_count = serializers.SerializerMethodField()
+    completed_task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Person
         fields = ['id', 'conference', 'categories', 'first_name',
                   'last_name', 'full_name', 'unique_code', 'hashed_unique_code', 'email', 'telephone',
-                  'is_active', 'registered_by']
+                  'is_active', 'task_count', 'completed_task_count', 'registered_by']
         read_only_fields = ['registered_by', 'hashed_unique_code']
 
     def create(self, validated_data):
@@ -57,3 +59,11 @@ class PersonSerializer(serializers.ModelSerializer):
             ).exclude(id=self.instance.id if self.instance else None).exists():
                 raise serializers.ValidationError("This unique code is already in use.")
         return value
+
+    @staticmethod
+    def get_task_count(obj):
+        return obj.tasks.count()
+
+    @staticmethod
+    def get_completed_task_count(obj):
+        return obj.tasks.filter(status=PersonTask.COMPLETED).count()
