@@ -83,16 +83,23 @@ class PersonSerializer(serializers.ModelSerializer):
 
     class TaskSerializer(serializers.ModelSerializer):
         assignment_count = serializers.SerializerMethodField()
+        completion_rate = serializers.SerializerMethodField()
 
         class Meta:
             model = Task
             fields = [
                 'id', 'conference', 'name', 'description', 'is_required',
-                'is_active', 'due_date', 'assignment_count',
-                'created_at', 'updated_at'
+                'is_active', 'due_date', 'assignment_count', 'completion_rate',
             ]
-            read_only_fields = ['created_at', 'updated_at']
 
         @staticmethod
         def get_assignment_count(obj):
             return obj.assignments.count()
+
+        @staticmethod
+        def get_completion_rate(obj):
+            total = obj.assignments.count()
+            if total == 0:
+                return 0
+            completed = obj.assignments.filter(status=PersonTask.COMPLETED).count()
+            return round((completed / total) * 100, 2)
