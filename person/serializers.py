@@ -124,3 +124,10 @@ class PersonTaskSerializer(serializers.ModelSerializer):
             'completed_by', 'person_name', 'task_name'
         ]
         read_only_fields = ['completed_at', 'completed_by']
+
+    def validate(self, data):
+        if self.instance and data.get('status') == PersonTask.COMPLETED:
+            if self.instance.status == PersonTask.COMPLETED:
+                raise serializers.ValidationError({
+                    'status': 'Task is already marked as completed'
+                })
