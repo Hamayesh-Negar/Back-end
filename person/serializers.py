@@ -103,3 +103,11 @@ class PersonSerializer(serializers.ModelSerializer):
                 return 0
             completed = obj.assignments.filter(status=PersonTask.COMPLETED).count()
             return round((completed / total) * 100, 2)
+
+        @staticmethod
+        def validate_due_date(value):
+            if value and value < timezone.now():
+                raise serializers.ValidationError(
+                    "Due date cannot be in the past"
+                )
+            return value
