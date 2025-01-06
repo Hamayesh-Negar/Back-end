@@ -131,3 +131,16 @@ class PersonTaskSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'status': 'Task is already marked as completed'
                 })
+
+            request = self.context.get('request')
+            if request and request.user:
+                data['completed_by'] = request.user
+                data['completed_at'] = timezone.now()
+
+        if 'task' in data and 'person' in data:
+            if data['task'].conference_id != data['person'].conference_id:
+                raise serializers.ValidationError({
+                    'task': 'Task must belong to the same conference as the person'
+                })
+
+        return data
