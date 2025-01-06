@@ -111,3 +111,17 @@ class PersonSerializer(serializers.ModelSerializer):
                     "Due date cannot be in the past"
                 )
             return value
+
+
+class PersonTaskSerializer(serializers.ModelSerializer):
+    person_name = serializers.CharField(source='person.get_full_name', read_only=True)
+
+    class Meta:
+        model = PersonTask
+        fields = [
+            'id', 'person', 'task', 'status', 'notes', 'completed_at',
+            'completed_by', 'person_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'completed_at', 'completed_by', 'created_at', 'updated_at'
+        ]
