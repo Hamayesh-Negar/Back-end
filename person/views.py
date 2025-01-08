@@ -55,6 +55,19 @@ class CategoryViewSet(ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
 
+    @action(detail=True, methods=['post'])
+    def bulk_add_members(self, request, pk=None):
+        category = self.get_object()
+        person_ids = request.data.get('person_ids', [])
+
+        persons = Person.objects.filter(
+            id__in=person_ids,
+            conference=category.conference
+        )
+
+        category.members.add(*persons)
+        return Response({'status': 'Members added successfully'})
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.members.exists():
