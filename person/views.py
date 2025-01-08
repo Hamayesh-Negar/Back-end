@@ -1,10 +1,11 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from person.models import Person, Category
+from person.models import Person, Category, PersonTask
 from person.serializers import PersonSerializer, CategorySerializer
 from user.permissions import IsHamayeshManager, IsSuperuser
 
@@ -24,6 +25,18 @@ class PersonViewSet(ModelViewSet):
         if conference_id:
             queryset = queryset.filter(conference_id=conference_id)
         return queryset
+
+    @action(detail=True, methods=['get'])
+    def tasks_summary(self, request, pk=None):
+        person = self.get_object()
+        tasks = person.tasks.select_related('task').all()
+        summary = {
+            'total': tasks.count(),
+            'completed': tasks.filter(status=PersonTask.COMPLETED).count(),
+            'pending': tasks.filter(status=PersonTask.PENDING).count(),
+            'in_progress': tasks.filter(status=PersonTask.IN_PROGRESS).count(),
+        }
+        return Response(summary)
 
 
 class CategoryViewSet(ModelViewSet):
