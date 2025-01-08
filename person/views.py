@@ -47,13 +47,17 @@ class PersonViewSet(ModelViewSet):
 
 
 class CategoryViewSet(ModelViewSet):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
+
+    def get_queryset(self):
+        return Category.objects.filter(
+            conference__admins=self.request.user
+        ).select_related('conference')
 
     @action(detail=True, methods=['post'])
     def bulk_add_members(self, request, pk=None):
