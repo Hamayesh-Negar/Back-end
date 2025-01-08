@@ -26,6 +26,13 @@ class PersonViewSet(ModelViewSet):
             queryset = queryset.filter(conference_id=conference_id)
         return queryset
 
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        person = self.get_object()
+        person.is_active = not person.is_active
+        person.save()
+        return Response(self.get_serializer(person).data)
+
     @action(detail=True, methods=['get'])
     def tasks_summary(self, request, pk=None):
         person = self.get_object()
