@@ -113,6 +113,41 @@ class PersonSerializer(serializers.ModelSerializer):
             return value
 
 
+class TaskSerializer(serializers.ModelSerializer):
+    conference_name = serializers.CharField(source='conference.name', read_only=True)
+    assignment_count = serializers.SerializerMethodField()
+    completion_rate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'conference', 'name', 'description', 'is_required',
+            'is_active', 'due_date', 'conference_name', 'assignment_count',
+            'completion_rate', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    @staticmethod
+    def get_assignment_count(obj):
+        return obj.assignments.count()
+
+    @staticmethod
+    def get_completion_rate(obj):
+        total = obj.assignments.count()
+        if total == 0:
+            return 0
+        completed = obj.assignments.filter(status=PersonTask.COMPLETED).count()
+        return round((completed / total) * 100, 2)
+
+    @staticmethod
+    def validate_due_date(value):
+        if value and value < timezone.now():
+            raise serializers.ValidationError(
+                "Due date cannot be in the past"
+            )
+        return value
+
+
 class PersonTaskSerializer(serializers.ModelSerializer):
     person_name = serializers.CharField(source='person.get_full_name', read_only=True)
     task_name = serializers.CharField(source='task.name', read_only=True)
