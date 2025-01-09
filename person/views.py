@@ -5,8 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from person.models import Person, Category, PersonTask
-from person.serializers import PersonSerializer, CategorySerializer
+from person.models import Person, Category, PersonTask, Task
+from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer
 from user.permissions import IsHamayeshManager, IsSuperuser
 
 
@@ -80,3 +80,15 @@ class CategoryViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         return super().destroy(request, *args, **kwargs)
+
+class TaskViewSet(ModelViewSet):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'due_date', 'created_at']
+
+    def get_queryset(self):
+        return Task.objects.filter(
+            conference__admins=self.request.user
+        ).select_related('conference')
