@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from person.models import Person, Category, PersonTask, Task
-from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer
+from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
 from user.permissions import IsHamayeshManager, IsSuperuser
 
 
@@ -44,6 +44,13 @@ class PersonViewSet(ModelViewSet):
             'in_progress': tasks.filter(status=PersonTask.IN_PROGRESS).count(),
         }
         return Response(summary)
+
+    @action(detail=True, methods=['get'])
+    def tasks(self, request, pk=None):
+        person = self.get_object()
+        tasks = person.tasks.select_related('task').all()
+        serializer = PersonTaskSerializer(tasks, many=True)
+        return Response(serializer.data)
 
 
 class CategoryViewSet(ModelViewSet):
