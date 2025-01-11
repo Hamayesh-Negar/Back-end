@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from person.models import Person, Category, PersonTask, Task
+from person.pagination import StandardResultsSetPagination
 from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
 from user.permissions import IsHamayeshManager, IsSuperuser
 
@@ -18,6 +19,7 @@ class PersonViewSet(ModelViewSet):
     filtetset_fields = ['is_active']
     search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         queryset = super().get_queryset()
