@@ -99,3 +99,17 @@ class TaskViewSet(ModelViewSet):
         return Task.objects.filter(
             conference__admins=self.request.user
         ).select_related('conference')
+    
+    @action(detail=True, methods=['get'])
+    def completion_stats(self, request, pk=None):
+        task = self.get_object()
+        total = task.assignments.count()
+        completed = task.assignments.filter(status=PersonTask.COMPLETED).count()
+        in_progress = task.assignments.filter(status=PersonTask.IN_PROGRESS).count()
+        
+        return Response({
+            'total_assignments': total,
+            'completed': completed,
+            'in_progress': in_progress,
+            'completion_rate': round((completed / total * 100), 2) if total > 0 else 0
+        })
