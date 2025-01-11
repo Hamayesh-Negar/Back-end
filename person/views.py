@@ -113,3 +113,16 @@ class TaskViewSet(ModelViewSet):
             'in_progress': in_progress,
             'completion_rate': round((completed / total * 100), 2) if total > 0 else 0
         })
+        
+class PersonTaskViewSet(ModelViewSet):
+    serializer_class = PersonTaskSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['status', 'person', 'task']
+    ordering_fields = ['created_at', 'completed_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        base_queryset = PersonTask.objects.select_related(
+            'person', 'task', 'completed_by'
+        )
