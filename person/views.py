@@ -131,3 +131,16 @@ class PersonTaskViewSet(ModelViewSet):
         if user.is_hamayesh_yar:
             return base_queryset.filter(person__conference__hamayesh_yars=user)
         return base_queryset.filter(person__conference__admins=user)
+    
+    @action(detail=True, methods=['post'])
+    def mark_completed(self, request, pk=None):
+        person_task = self.get_object()
+        if person_task.status == PersonTask.COMPLETED:
+            return Response(
+                {'error': 'Task is already completed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        person_task.mark_completed(request.user)
+        serializer = self.get_serializer(person_task)
+        return Response(serializer.data)
