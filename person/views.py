@@ -126,3 +126,8 @@ class PersonTaskViewSet(ModelViewSet):
         base_queryset = PersonTask.objects.select_related(
             'person', 'task', 'completed_by'
         )
+        
+        # check it later
+        if user.is_hamayesh_yar:
+            return base_queryset.filter(person__conference__hamayesh_yars=user)
+        return base_queryset.filter(person__conference__admins=user)
