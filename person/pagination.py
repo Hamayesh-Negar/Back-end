@@ -22,3 +22,12 @@ class StandardResultsSetPagination(PageNumberPagination):
             ('results', data)
         ]))
         
+
+class LargeResultsSetPagination(PageNumberPagination):
+    """
+    Pagination class for endpoints that need to handle larger datasets.
+    Usage: ?page=2&page_size=50
+    """
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 500
