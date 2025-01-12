@@ -133,9 +133,9 @@ class PersonTaskViewSet(ModelViewSet):
         )
 
         # check it later
-        if user.is_hamayesh_yar:
-            return base_queryset.filter(person__conference__hamayesh_yars=user)
-        return base_queryset.filter(person__conference__admins=user)
+        # if user.is_hamayesh_yar:
+        #     return base_queryset.filter(person__conference__hamayesh_yars=user)
+        # return base_queryset.filter(person__conference__admins=user)
 
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
