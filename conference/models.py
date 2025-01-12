@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.utils import timezone
 
 
 class Conference(models.Model):
@@ -20,3 +23,11 @@ class Conference(models.Model):
 
     def __str__(self):
         return self.name
+
+
+@receiver(post_save, sender=Conference)
+def update_conference_status(sender, instance, **kwargs):
+    today = timezone.now().date()
+
+    if today > instance.end_date and instance.is_active:
+        Conference.objects.filter(pk=instance.pk).update(is_active=False)
