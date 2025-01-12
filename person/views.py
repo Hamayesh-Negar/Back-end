@@ -90,6 +90,7 @@ class CategoryViewSet(ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+
 class TaskViewSet(ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
@@ -101,21 +102,22 @@ class TaskViewSet(ModelViewSet):
         return Task.objects.filter(
             conference__admins=self.request.user
         ).select_related('conference')
-    
+
     @action(detail=True, methods=['get'])
     def completion_stats(self, request, pk=None):
         task = self.get_object()
         total = task.assignments.count()
         completed = task.assignments.filter(status=PersonTask.COMPLETED).count()
         in_progress = task.assignments.filter(status=PersonTask.IN_PROGRESS).count()
-        
+
         return Response({
             'total_assignments': total,
             'completed': completed,
             'in_progress': in_progress,
             'completion_rate': round((completed / total * 100), 2) if total > 0 else 0
         })
-        
+
+
 class PersonTaskViewSet(ModelViewSet):
     serializer_class = PersonTaskSerializer
     permission_classes = [IsAuthenticated]
@@ -129,12 +131,12 @@ class PersonTaskViewSet(ModelViewSet):
         base_queryset = PersonTask.objects.select_related(
             'person', 'task', 'completed_by'
         )
-        
+
         # check it later
         if user.is_hamayesh_yar:
             return base_queryset.filter(person__conference__hamayesh_yars=user)
         return base_queryset.filter(person__conference__admins=user)
-    
+
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
         person_task = self.get_object()
@@ -143,7 +145,7 @@ class PersonTaskViewSet(ModelViewSet):
                 {'error': 'Task is already completed'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
+
         person_task.mark_completed(request.user)
         serializer = self.get_serializer(person_task)
         return Response(serializer.data)
