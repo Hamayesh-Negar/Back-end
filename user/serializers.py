@@ -23,6 +23,20 @@ class UserBaseSerializer(ModelSerializer):
         ]
         read_only_fields = ['date_joined']
 
+    def validate_phone(self, value):
+        if value:
+            normalized_phone = value.strip().replace(' ', '')
+            if not normalized_phone.startswith('+'):
+                normalized_phone = f'+{normalized_phone}'
+
+            if User.objects.filter(phone=normalized_phone).exclude(
+                    id=getattr(self.instance, 'id', None)
+            ).exists():
+                raise serializers.ValidationError("This phone number is already in use.")
+
+            return normalized_phone
+        return value
+
     def validate_email(self, value):
         if value:
             normalized_email = value.lower().strip()
