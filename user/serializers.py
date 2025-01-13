@@ -46,3 +46,10 @@ class UserBaseSerializer(ModelSerializer):
                 raise serializers.ValidationError("This email is already in use.")
             return normalized_email
         return value
+
+class UserCreateSerializer(UserBaseSerializer):
+    password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    class Meta(UserBaseSerializer.Meta):
+        fields = UserBaseSerializer.Meta.fields + ['password', 'confirm_password']
