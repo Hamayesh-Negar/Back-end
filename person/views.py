@@ -103,6 +103,26 @@ class TaskViewSet(ModelViewSet):
             conference__admins=self.request.user
         ).select_related('conference')
 
+    @action(detail=True, methods=['post'])
+    def bulk_assign(self, request, pk=None):
+
+        task = self.get_object()
+        person_ids = request.data.get('person_ids', [])
+
+        existing_assignments = set(task.assignments.values_list('person_id', flat=True))
+        new_assignments = set(person_ids) - existing_assignments
+
+        bulk_assignments = [
+            PersonTask(
+                task=task,
+                person_id=person_id,
+                status=PersonTask.PENDING
+            ) for person_id in new_assignments
+        ]
+
+        PersonTask.objects.bulk_create(bulk_assignments)
+        return Response({'status': 'Task assigned successfully for the selected persons.'})
+
     @action(detail=True, methods=['get'])
     def completion_stats(self, request, pk=None):
         task = self.get_object()
