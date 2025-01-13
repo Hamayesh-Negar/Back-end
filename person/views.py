@@ -127,15 +127,10 @@ class PersonTaskViewSet(ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        user = self.request.user
         base_queryset = PersonTask.objects.select_related(
             'person', 'task', 'completed_by'
         )
-
-        # check it later
-        # if user.is_hamayesh_yar:
-        #     return base_queryset.filter(person__conference__hamayesh_yars=user)
-        # return base_queryset.filter(person__conference__admins=user)
+        return base_queryset.filter(person__conference__admins=self.request.user)
 
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
