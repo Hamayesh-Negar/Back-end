@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError
 
 from user.models import User
 
@@ -59,3 +61,11 @@ class UserCreateSerializer(UserBaseSerializer):
             raise serializers.ValidationError({
                 'confirm_password': "Passwords do not match."
             })
+
+        try:
+            password_validation.validate_password(data.get('password'))
+        except ValidationError as e:
+            raise serializers.ValidationError({
+                'password': list(e.messages)
+            })
+
