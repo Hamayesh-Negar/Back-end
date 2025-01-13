@@ -43,7 +43,6 @@ class PersonViewSet(ModelViewSet):
             'total': tasks.count(),
             'completed': tasks.filter(status=PersonTask.COMPLETED).count(),
             'pending': tasks.filter(status=PersonTask.PENDING).count(),
-            'in_progress': tasks.filter(status=PersonTask.IN_PROGRESS).count(),
         }
         return Response(summary)
 
@@ -128,12 +127,12 @@ class TaskViewSet(ModelViewSet):
         task = self.get_object()
         total = task.assignments.count()
         completed = task.assignments.filter(status=PersonTask.COMPLETED).count()
-        in_progress = task.assignments.filter(status=PersonTask.IN_PROGRESS).count()
+        pending = task.assignments.filter(status=PersonTask.PENDING).count()
 
         return Response({
             'total_assignments': total,
             'completed': completed,
-            'in_progress': in_progress,
+            'pending': pending,
             'completion_rate': round((completed / total * 100), 2) if total > 0 else 0
         })
 
