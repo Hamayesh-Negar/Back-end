@@ -53,3 +53,9 @@ class UserCreateSerializer(UserBaseSerializer):
 
     class Meta(UserBaseSerializer.Meta):
         fields = UserBaseSerializer.Meta.fields + ['password', 'confirm_password']
+
+    def validate(self, data):
+        if data.get('password') != data.get('confirm_password'):
+            raise serializers.ValidationError({
+                'confirm_password': "Passwords do not match."
+            })
