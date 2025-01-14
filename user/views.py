@@ -1,5 +1,7 @@
 from rest_framework import filters
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from user.models import User
@@ -35,3 +37,11 @@ class UserViewSet(ModelViewSet):
         elif self.action in ['update', 'partial_update']:
             return UserBaseSerializer
         return UserSerializer
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        user = self.get_object()
+        user.is_active = True
+        user.save()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
