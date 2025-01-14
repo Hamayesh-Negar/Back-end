@@ -1,4 +1,5 @@
 from django.contrib.auth import password_validation
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -87,3 +88,8 @@ class UserCreateSerializer(UserBaseSerializer):
                     })
 
         return data
+
+    def create(self, validated_data):
+        validated_data.pop('confirm_password')
+        validated_data['password'] = make_password(validated_data.get('password'))
+        return super().create(validated_data)
