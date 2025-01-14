@@ -1,7 +1,7 @@
-from rest_framework import serializers
-from rest_framework.serializers import ModelSerializer
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
+from rest_framework import serializers
+from rest_framework.serializers import ModelSerializer
 
 from user.models import User
 
@@ -49,6 +49,7 @@ class UserBaseSerializer(ModelSerializer):
             return normalized_email
         return value
 
+
 class UserCreateSerializer(UserBaseSerializer):
     password = serializers.CharField(write_only=True, required=True)
     confirm_password = serializers.CharField(write_only=True, required=True)
@@ -69,3 +70,20 @@ class UserCreateSerializer(UserBaseSerializer):
                 'password': list(e.messages)
             })
 
+        request = self.context.get('request')
+        if request and request.user:
+            creating_user = request.user
+            requested_type = data.get('user_type')
+
+            if not creating_user.is_superuser:
+                if creating_user.is_hamayesh_manager:
+                    if requested_type not in [User.UserType.HAMAYESH_YAR]:
+                        raise serializers.ValidationError({
+                            'user_type': "Hamayesh managers can only create Hamayesh Yar accounts."
+                        })
+                else:
+                    raise serializers.ValidationError({
+                        'user_type': "You don't have permission to create users."
+                    })
+
+        return data
