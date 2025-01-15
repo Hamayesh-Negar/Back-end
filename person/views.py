@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
+from yaml import serialize
 
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
@@ -55,17 +56,13 @@ class PersonViewSet(ModelViewSet):
 
 
 class CategoryViewSet(ModelViewSet):
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
-
-    def get_queryset(self):
-        return Category.objects.filter(
-            conference__admins=self.request.user
-        ).select_related('conference')
 
     @action(detail=True, methods=['post'])
     def bulk_add_members(self, request, pk=None):
@@ -79,6 +76,13 @@ class CategoryViewSet(ModelViewSet):
 
         category.members.add(*persons)
         return Response({'status': 'Members added successfully'})
+
+    @action(detail=True, methods=['get'])
+    def members(self, request, pk=None):
+        category = self.get_object()
+        members = category.members
+        serializer = PersonSerializer(members, many=True)
+        return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
