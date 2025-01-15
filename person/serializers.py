@@ -139,6 +139,17 @@ class PersonTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['completed_at', 'completed_by']
 
     def validate(self, data):
+        if 'task' in data and 'person' in data:
+            if data['task'].conference_id != data['person'].conference_id:
+                raise serializers.ValidationError({
+                    'task': 'Task must belong to the same conference as the person'
+                })
+
+        person = data['person']
+        task = data['task']
+        if PersonTask.objects.filter(person=person, task=task).exists():
+            raise serializers.ValidationError("This task is already assigned to this person.")
+
         if self.instance and data.get('status') == PersonTask.COMPLETED:
             if self.instance.status == PersonTask.COMPLETED:
                 raise serializers.ValidationError({
@@ -149,11 +160,4 @@ class PersonTaskSerializer(serializers.ModelSerializer):
             if request and request.user:
                 data['completed_by'] = request.user
                 data['completed_at'] = timezone.now()
-
-        if 'task' in data and 'person' in data:
-            if data['task'].conference_id != data['person'].conference_id:
-                raise serializers.ValidationError({
-                    'task': 'Task must belong to the same conference as the person'
-                })
-
         return data
