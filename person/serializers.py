@@ -46,13 +46,6 @@ class PersonSerializer(serializers.ModelSerializer):
         instance.categories.set(categories)
         return instance
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        request = self.context.get('request')
-        if request.user.is_hamayesh_yar:
-            representation.pop('is_active', None)
-        return representation
-
     def validate_unique_code(self, value):
         if value:
             if Person.objects.filter(
