@@ -63,6 +63,7 @@ class CategoryViewSet(ModelViewSet):
     filtetset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
+    pagination_class = LargeResultsSetPagination
 
     @action(detail=True, methods=['post'])
     def bulk_add_members(self, request, pk=None):
