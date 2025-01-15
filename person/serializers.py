@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from person.models import Person, Category, PersonTask, Task
+from user.models import User
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -28,6 +29,8 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class PersonSerializer(serializers.ModelSerializer):
+    categories = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), many=True)
+    registered_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
     full_name = serializers.CharField(source='get_full_name', read_only=True)
     task_count = serializers.SerializerMethodField()
     completed_task_count = serializers.SerializerMethodField()
@@ -43,6 +46,12 @@ class PersonSerializer(serializers.ModelSerializer):
         categories = validated_data.pop('categories', [])
         validated_data['registered_by'] = self.context['request'].user
         instance = super().create(validated_data)
+        instance.categories.set(categories)
+        return instance
+
+    def update(self, instance, validated_data):
+        categories = validated_data.pop('categories')
+        instance = super().update(instance, validated_data)
         instance.categories.set(categories)
         return instance
 
