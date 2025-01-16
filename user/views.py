@@ -45,3 +45,27 @@ class UserViewSet(ModelViewSet):
         user.save()
         serializer = self.get_serializer(user)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        user = self.get_object()
+        user.is_active = False
+        user.save()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def make_manager(self, request, pk=None):
+        user = self.get_object()
+        user.user_type = User.UserType.HAMAYESH_MANAGER
+        user.save()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def make_yar(self, request, pk=None):
+        user = self.get_object()
+        user.user_type = User.UserType.HAMAYESH_YAR
+        user.save()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
