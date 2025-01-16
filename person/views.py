@@ -4,7 +4,6 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-from yaml import serialize
 
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
@@ -21,13 +20,6 @@ class PersonViewSet(ModelViewSet):
     search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        conference_id = self.request.query_params.get('conference_id', None)
-        if conference_id:
-            queryset = queryset.filter(conference_id=conference_id)
-        return queryset
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
@@ -96,16 +88,12 @@ class CategoryViewSet(ModelViewSet):
 
 
 class TaskViewSet(ModelViewSet):
+    queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'due_date', 'created_at']
-
-    def get_queryset(self):
-        return Task.objects.filter(
-            conference__admins=self.request.user
-        ).select_related('conference')
 
     @action(detail=True, methods=['post'])
     def bulk_assign(self, request, pk=None):
@@ -143,18 +131,13 @@ class TaskViewSet(ModelViewSet):
 
 
 class PersonTaskViewSet(ModelViewSet):
+    queryset = PersonTask.objects.all()
     serializer_class = PersonTaskSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'person', 'task']
     ordering_fields = ['created_at', 'completed_at']
     pagination_class = StandardResultsSetPagination
-
-    def get_queryset(self):
-        base_queryset = PersonTask.objects.select_related(
-            'person', 'task', 'completed_by'
-        )
-        return base_queryset.filter(person__conference__admins=self.request.user)
 
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
