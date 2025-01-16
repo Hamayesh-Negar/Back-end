@@ -52,8 +52,8 @@ class UserBaseSerializer(ModelSerializer):
 
 
 class UserCreateSerializer(UserBaseSerializer):
-    password = serializers.CharField(write_only=True, required=True)
-    confirm_password = serializers.CharField(write_only=True, required=True)
+    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    confirm_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
 
     class Meta(UserBaseSerializer.Meta):
         fields = UserBaseSerializer.Meta.fields + ['password', 'confirm_password']
@@ -91,5 +91,13 @@ class UserCreateSerializer(UserBaseSerializer):
 
     def create(self, validated_data):
         validated_data.pop('confirm_password')
-        validated_data['password'] = make_password(validated_data.get('password'))
-        return super().create(validated_data)
+        user_type = validated_data.get('user_type')
+
+        if user_type == User.UserType.HAMAYESH_MANAGER:
+            user = User.objects.create_hamayesh_manager(**validated_data)
+        elif user_type == User.UserType.HAMAYESH_YAR:
+            user = User.objects.create_hamayesh_yar(**validated_data)
+        else:
+            user = User.objects.create_user(**validated_data)
+
+        return user
