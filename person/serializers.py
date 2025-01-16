@@ -145,10 +145,11 @@ class PersonTaskSerializer(serializers.ModelSerializer):
                     'task': 'Task must belong to the same conference as the person'
                 })
 
-        person = data['person']
-        task = data['task']
-        if PersonTask.objects.filter(person=person, task=task).exists():
-            raise serializers.ValidationError("This task is already assigned to this person.")
+        if not self.instance:
+            person = data['person']
+            task = data['task']
+            if PersonTask.objects.filter(person=person, task=task).exists():
+                raise serializers.ValidationError("This task is already assigned to this person.")
 
         if self.instance and data.get('status') == PersonTask.COMPLETED:
             if self.instance.status == PersonTask.COMPLETED:
