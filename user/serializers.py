@@ -1,4 +1,5 @@
 from django.contrib.auth import password_validation
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -102,10 +103,10 @@ class UserCreateSerializer(UserBaseSerializer):
         return user
 
 
-class UserChangePasswordSerializer(ModelSerializer):
-    old_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    confirm_new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+class UserChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, style={'input_type': 'password'})
+    new_password = serializers.CharField(required=True, style={'input_type': 'password'})
+    confirm_new_password = serializers.CharField(required=True, style={'input_type': 'password'})
 
     def validate_old_password(self, value):
         user = self.context['request'].user
@@ -119,6 +120,13 @@ class UserChangePasswordSerializer(ModelSerializer):
             password_validation.validate_password(value)
         except ValidationError as e:
             raise serializers.ValidationError(str(e))
+
+    def validate(self, data):
+        if data.get('new_password') != data.get('confirm_new_password'):
+            raise serializers.ValidationError({
+                'detail': "Passwords do not match."
+            })
+        return data
 
     def save(self, **kwargs):
         user = self.context['request'].user

@@ -1,4 +1,4 @@
-from rest_framework import filters
+from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -39,6 +39,16 @@ class UserViewSet(ModelViewSet):
         elif self.action == 'change_password':
             return UserChangePasswordSerializer
         return UserSerializer
+
+    @action(detail=True, methods=['post'])
+    def change_password(self, request, pk=None):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {'status': 'Password changed successfully'}
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
