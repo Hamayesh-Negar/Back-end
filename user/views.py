@@ -93,3 +93,9 @@ class UserViewSet(ModelViewSet):
             'inactive_users': queryset.filter(is_active=False).count(),
         }
         return Response(stat)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'detail': 'You do not have permission to perform this action.'},
+                            status=403)
+        return super().destroy(request, *args, **kwargs)
