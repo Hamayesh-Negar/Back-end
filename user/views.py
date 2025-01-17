@@ -13,6 +13,7 @@ class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     permission_classes = [IsAuthenticated, IsSuperuser]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active', 'user_type']
     search_fields = ['first_name', 'last_name', 'email', 'phone']
     ordering_fields = ['first_name', 'last_name', 'date_joined']
     ordering = ['-date_joined']
@@ -28,8 +29,7 @@ class UserViewSet(ModelViewSet):
             return queryset
         elif user.user_type == User.UserType.HAMAYESH_MANAGER:
             return queryset.filter(user_type=User.UserType.HAMAYESH_YAR)
-        else:
-            return queryset.filter(id=user.id)
+        return queryset.filter(id=user.id)
 
     def get_serializer_class(self):
         if self.action == 'create':
