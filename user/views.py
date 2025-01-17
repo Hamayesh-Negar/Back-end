@@ -81,3 +81,15 @@ class UserViewSet(ModelViewSet):
         user.save()
         serializer = self.get_serializer(user)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperuser])
+    def statistics(self, request):
+        queryset = self.queryset
+        stat = {
+            'total_users': queryset.count(),
+            'hamayesh_managers': queryset.filter(user_type=User.UserType.HAMAYESH_MANAGER).count(),
+            'hamayesh_yars': queryset.filter(user_type=User.UserType.HAMAYESH_YAR).count(),
+            'active_users': queryset.filter(is_active=True).count(),
+            'inactive_users': queryset.filter(is_active=False).count(),
+        }
+        return Response(stat)
