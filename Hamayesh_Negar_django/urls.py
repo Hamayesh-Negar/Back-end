@@ -20,7 +20,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('user/', include('user.urls')),
+    path('api/v1/user/', include('user.urls')),
     path('api/v1/', include('person.urls')),
     path('api/token/', obtain_auth_token),
 ]
