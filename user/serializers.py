@@ -1,5 +1,4 @@
 from django.contrib.auth import password_validation
-from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -100,4 +99,29 @@ class UserCreateSerializer(UserBaseSerializer):
         else:
             user = User.objects.create_user(**validated_data)
 
+        return user
+
+
+class UserChangePasswordSerializer(ModelSerializer):
+    old_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    confirm_new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Old password is incorrect.")
+        return value
+
+    @staticmethod
+    def validate_new_password(value):
+        try:
+            password_validation.validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
+
+    def save(self, **kwargs):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save()
         return user

@@ -6,7 +6,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from user.models import User
 from user.permissions import IsSuperuser
-from user.serializers import UserSerializer, UserBaseSerializer, UserCreateSerializer
+from user.serializers import UserSerializer, UserBaseSerializer, UserCreateSerializer, UserChangePasswordSerializer
 
 
 class UserViewSet(ModelViewSet):
@@ -36,6 +36,8 @@ class UserViewSet(ModelViewSet):
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
             return UserBaseSerializer
+        elif self.action == 'change_password':
+            return UserChangePasswordSerializer
         return UserSerializer
 
     @action(detail=True, methods=['post'])
