@@ -18,9 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.authtoken.views import obtain_auth_token
 
+from Hamayesh_Negar_django import views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/user/', include('user.urls')),
     path('api/v1/', include('person.urls')),
     path('api/token/', obtain_auth_token),
+    path('health/', views.health_check, name='health-check'),
 ]
