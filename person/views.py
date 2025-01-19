@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from person.filters import PersonFilter
+from person.filters import CustomSearchFilter
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
@@ -16,10 +16,8 @@ class PersonViewSet(ModelViewSet):
     queryset = Person.objects.all()
     serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = PersonFilter
+    filter_backends = [DjangoFilterBackend, CustomSearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
-    search_fields = ['first_name', 'last_name', 'telephone', 'email', 'unique_code', 'hashed_unique_code']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
 
