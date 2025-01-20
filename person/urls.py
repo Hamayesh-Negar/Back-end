@@ -16,7 +16,11 @@ conference_router.register(r'persons', PersonViewSet, basename='conference-perso
 conference_router.register(r'categories', CategoryViewSet, basename='conference-categories')
 conference_router.register(r'tasks', TaskViewSet, basename='conference-tasks')
 
+categories_router = routers.NestedDefaultRouter(router, r'categories', lookup='category')
+categories_router.register(r'persons', PersonViewSet, basename='category-persons')
+
 urlpatterns = [
     path('', include(router.urls)),
     path('', include(conference_router.urls)),
+    path('', include(categories_router.urls)),
 ]
