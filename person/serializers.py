@@ -85,7 +85,6 @@ class PersonSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    conference_name = serializers.CharField(source='conference.name', read_only=True)
     assignment_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
 
@@ -93,7 +92,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'conference', 'name', 'description', 'is_required',
-            'is_active', 'due_date', 'conference_name', 'assignment_count',
+            'is_active', 'due_date', 'assignment_count',
             'completion_rate', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
