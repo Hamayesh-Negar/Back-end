@@ -21,25 +21,6 @@ class PersonViewSet(ModelViewSet):
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
 
-    # @action(detail=False, methods=['get'])
-    # def search(self, request):
-    #     unique_code = request.query_params.get('unique_code')
-    #     hashed_unique_code = request.query_params.get('hashed_unique_code')
-    #
-    #     if unique_code:
-    #         person = Person.objects.filter(unique_code=unique_code).first()
-    #         if person:
-    #             return Response(PersonSerializer(person).data)
-    #         return Response({'detail': 'Person not found'}, status=status.HTTP_404_NOT_FOUND)
-    #
-    #     if hashed_unique_code:
-    #         person = Person.objects.filter(hashed_unique_code=hashed_unique_code).first()
-    #         if person:
-    #             return Response(PersonSerializer(person).data)
-    #         return Response({'detail': 'Person not found'}, status=status.HTTP_404_NOT_FOUND)
-    #
-    #     return Response({'detail': 'Unique code or hashed unique code is required'}, status=status.HTTP_400_BAD_REQUEST)
-
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
         person = self.get_object()
