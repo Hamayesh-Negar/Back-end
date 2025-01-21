@@ -39,13 +39,6 @@ class PersonViewSet(ModelViewSet):
         }
         return Response(summary)
 
-    @action(detail=True, methods=['get'])
-    def tasks(self, request, pk=None):
-        person = self.get_object()
-        tasks = person.tasks.select_related('task').all()
-        serializer = PersonTaskSerializer(tasks, many=True)
-        return Response(serializer.data)
-
 
 class CategoryViewSet(ModelViewSet):
     queryset = Category.objects.all()
