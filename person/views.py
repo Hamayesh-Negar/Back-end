@@ -45,7 +45,6 @@ class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filtetset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
     pagination_class = LargeResultsSetPagination
