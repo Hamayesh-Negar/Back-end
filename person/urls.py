@@ -23,9 +23,14 @@ persons_router = routers.NestedDefaultRouter(router, r'persons', lookup='person'
 persons_router.register(r'tasks', TaskViewSet, basename='person-tasks')
 persons_router.register(r'person_tasks', PersonTaskViewSet, basename='person-task')
 
+task_router = routers.NestedDefaultRouter(router, r'tasks', lookup='task')
+task_router.register(r'person_tasks', PersonTaskViewSet, basename='task-person-tasks')
+
+
 urlpatterns = [
     path('', include(router.urls)),
     path('', include(conference_router.urls)),
     path('', include(categories_router.urls)),
     path('', include(persons_router.urls)),
+    path('', include(task_router.urls)),
 ]
