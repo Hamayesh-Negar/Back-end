@@ -81,12 +81,21 @@ class CategoryViewSet(ModelViewSet):
 
 
 class TaskViewSet(ModelViewSet):
-    queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'due_date', 'created_at']
+
+    def get_queryset(self):
+        person_id = self.kwargs.get('person_pk')
+        conference_id = self.kwargs.get('conference_pk')
+        if person_id:
+            return Task.objects.filter(assignments__person_id=person_id)
+        elif conference_id:
+            return Task.objects.filter(conference_id=conference_id)
+        else:
+            return Task.objects.all()
 
     @action(detail=True, methods=['post'])
     def bulk_assign(self, request, pk=None):
