@@ -5,7 +5,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from person.filters import CustomSearchFilter
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
@@ -16,8 +15,9 @@ class PersonViewSet(ModelViewSet):
     queryset = Person.objects.all()
     serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
-    filter_backends = [DjangoFilterBackend, CustomSearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
+    search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
 
@@ -43,7 +43,7 @@ class PersonViewSet(ModelViewSet):
 class CategoryViewSet(ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
+    permission_classes = [IsAuthenticated, IsHamayeshManager]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
@@ -89,6 +89,7 @@ class TaskViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def bulk_assign(self, request, pk=None):
+
         task = self.get_object()
         person_ids = request.data.get('person_ids', [])
 
