@@ -19,7 +19,7 @@ class CustomSearchFilter(BaseFilterBackend):
         if email:
             queryset = queryset.filter(email__icontains=email)
         if unique_code:
-            queryset = queryset.filter(unique_code__iexact=unique_code)
+            queryset = queryset.filter(unique_code__exact=unique_code)
         if hashed_unique_code:
             queryset = queryset.filter(hashed_unique_code__iexact=hashed_unique_code)
 
