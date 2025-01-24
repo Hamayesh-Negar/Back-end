@@ -124,13 +124,16 @@ class TaskViewSet(ModelViewSet):
 
 
 class PersonTaskViewSet(ModelViewSet):
-    queryset = PersonTask.objects.all()
     serializer_class = PersonTaskSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'person', 'task']
     ordering_fields = ['created_at', 'completed_at']
     pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        person_id = self.kwargs.get('person_pk')
+        return PersonTask.objects.filter(person_id=person_id)
 
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
