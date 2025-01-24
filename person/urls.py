@@ -21,6 +21,7 @@ categories_router.register(r'persons', PersonViewSet, basename='category-persons
 
 persons_router = routers.NestedDefaultRouter(router, r'persons', lookup='person')
 persons_router.register(r'tasks', TaskViewSet, basename='person-tasks')
+persons_router.register(r'person_tasks', PersonTaskViewSet, basename='person-task')
 
 urlpatterns = [
     path('', include(router.urls)),
