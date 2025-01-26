@@ -35,7 +35,7 @@ INSTALLED_APPS = [
     'admin_interface',
     'colorfield',
     'import_export',
-    'crispy_forms',
+    # 'crispy_forms',
     'widget_tweaks',
     'django.contrib.admin',
     'django.contrib.auth',
