@@ -12,7 +12,6 @@ from user.permissions import IsHamayeshManager, IsSuperuser
 
 
 class PersonViewSet(ModelViewSet):
-    queryset = Person.objects.all()
     serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -20,6 +19,12 @@ class PersonViewSet(ModelViewSet):
     search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
+
+    def get_queryset(self):
+        conference = self.kwargs.get('conference_pk')
+        if conference:
+            return Person.objects.filter(conference_id=conference)
+        return Person.objects.all()
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
