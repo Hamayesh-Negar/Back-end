@@ -46,7 +46,6 @@ class PersonViewSet(ModelViewSet):
 
 
 class CategoryViewSet(ModelViewSet):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsHamayeshManager]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -54,6 +53,12 @@ class CategoryViewSet(ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
     pagination_class = LargeResultsSetPagination
+
+    def get_queryset(self):
+        conference = self.kwargs.get('conference_pk')
+        if conference:
+            return Category.objects.filter(conference_id=conference)
+        return Category.objects.all()
 
     @action(detail=True, methods=['post'])
     def bulk_add_members(self, request, pk=None):
