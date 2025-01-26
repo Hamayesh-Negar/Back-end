@@ -1,3 +1,5 @@
+from unicodedata import category
+
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
 from rest_framework.decorators import action
@@ -22,8 +24,11 @@ class PersonViewSet(ModelViewSet):
 
     def get_queryset(self):
         conference = self.kwargs.get('conference_pk')
+        category_pk = self.kwargs.get('category_pk')
         if conference:
             return Person.objects.filter(conference_id=conference)
+        if category:
+            return Person.objects.filter(categories__id=category_pk)
         return Person.objects.all()
 
     @action(detail=True, methods=['post'])
