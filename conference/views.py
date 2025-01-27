@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework.decorators import action
@@ -18,6 +19,25 @@ class ConferenceViewSet(ModelViewSet):
     filtetset_fields = ['is_active']
     search_fields = ['name', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['start_date', 'end_date']
+    lookup_field = 'slug'
+    lookup_value_regex = '[0-9]+|[a-zA-Z0-9-]+'
+
+    def get_object(self):
+        """
+        Get object by either slug or pk
+        """
+        queryset = self.get_queryset()
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup_value = self.kwargs[lookup_url_kwarg]
+
+        try:
+            lookup_value = int(lookup_value)
+            obj = get_object_or_404(queryset, pk=lookup_value)
+        except ValueError:
+            obj = get_object_or_404(queryset, slug=lookup_value)
+
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     @action(detail=False, methods=['get'])
     def active(self, request):
@@ -26,7 +46,7 @@ class ConferenceViewSet(ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def categories(self, request, pk=None):
+    def categories(self, request, slug=None):
         conference = self.get_object()
         categories = conference.categories
         serializer = CategorySerializer(categories, many=True)
@@ -40,7 +60,7 @@ class ConferenceViewSet(ModelViewSet):
         return [permission() for permission in permission_classes]
 
     @action(detail=True, methods=['get'])
-    def statistics(self, request, pk=None):
+    def statistics(self, request, slug=None):
         conference = self.get_object()
         sets = {
             'total_attendees': conference.attendees.count(),

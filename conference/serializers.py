@@ -9,11 +9,17 @@ class ConferenceSerializer(ModelSerializer):
 
     class Meta:
         model = Conference
-        fields = ['id', 'name', 'description', 'start_date',
+        fields = ['id', 'name', 'slug', 'description', 'start_date',
                   'end_date', 'is_active', 'created_by', 'days_duration']
         read_only_fields = ['created_at', 'updated_at', 'created_by']
 
     def validate(self, data):
+        if data.get('slug'):
+            if Conference.objects.filter(slug=data['slug']).exists():
+                raise serializers.ValidationError({
+                    "slug": "Conference with this slug already exists"
+                })
+
         if data.get('start_date') and data.get('end_date'):
             if data['start_date'] > data['end_date']:
                 raise serializers.ValidationError({
