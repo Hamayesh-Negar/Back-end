@@ -28,7 +28,7 @@ class Conference(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.slug)
+            self.slug = slugify(self.name)
             org_slug = self.slug
             if Conference.objects.filter(slug=self.slug).exists():
                 self.slug = f"{org_slug}-{self.id}"
