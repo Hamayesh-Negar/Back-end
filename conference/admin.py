@@ -11,13 +11,14 @@ from .models import Conference
 class ConferenceResource(resources.ModelResource):
     class Meta:
         model = Conference
-        fields = ('id', 'name', 'description', 'start_date', 'end_date', 'is_active')
+        fields = ('id', 'name', 'slug', 'description', 'start_date', 'end_date', 'is_active')
         export_order = fields
 
 
 @admin.register(Conference)
 class ConferenceAdmin(ImportExportModelAdmin):
     resource_class = ConferenceResource
+    prepopulated_fields = {'slug': ('name',)}
 
     list_display = (
         'name',
@@ -33,8 +34,9 @@ class ConferenceAdmin(ImportExportModelAdmin):
         'start_date',
         'end_date'
     )
-    search_fields = ('name', 'description')
+    search_fields = ('name', 'slug', 'description')
     date_hierarchy = 'start_date'
+    readonly_fields = ('created_at', 'updated_at', 'created_by')
 
     def date_range(self, obj):
         return mark_safe(
