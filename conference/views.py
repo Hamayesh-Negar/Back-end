@@ -1,3 +1,6 @@
+from typing import Union, cast
+
+from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
@@ -13,7 +16,6 @@ from user.permissions import CanEditAllFields, CanEditBasicFields
 
 
 class ConferenceViewSet(ModelViewSet):
-    queryset = Conference.objects.all()
     serializer_class = ConferenceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
@@ -22,6 +24,12 @@ class ConferenceViewSet(ModelViewSet):
     lookup_field = 'slug'
     lookup_value_regex = '[0-9]+|[a-zA-Z0-9-]+'
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Conference.objects.all()
+        return Conference.objects.filter(created_by=user)
+
     def get_object(self):
         """
         Get object by either slug or pk
@@ -29,12 +37,13 @@ class ConferenceViewSet(ModelViewSet):
         queryset = self.get_queryset()
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         lookup_value = self.kwargs[lookup_url_kwarg]
+        typed_queryset = cast(Union[QuerySet[Conference], type[Conference]], queryset)
 
         try:
             lookup_value = int(lookup_value)
-            obj = get_object_or_404(queryset, pk=lookup_value)
+            obj = get_object_or_404(typed_queryset, pk=lookup_value)
         except ValueError:
-            obj = get_object_or_404(queryset, slug=lookup_value)
+            obj = get_object_or_404(typed_queryset, slug=lookup_value)
 
         self.check_object_permissions(self.request, obj)
         return obj
