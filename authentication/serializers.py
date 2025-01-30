@@ -16,9 +16,14 @@ class RegisterSerializer(ModelSerializer):
         user = User.objects.create(**validated_data)
         return user
 
+
 class LoginSerializer(ModelSerializer):
     email = serializers.CharField(required=True)
     password = serializers.CharField(required=True, style={'input_type': 'password'})
+
+    class Meta:
+        model = User
+        fields = ['email', 'password']
 
     def validate(self, data):
         # email = data.get('email')
@@ -27,4 +32,4 @@ class LoginSerializer(ModelSerializer):
         user = authenticate(**data)
         if user and user.is_active:
             return user
-        raise serializers.ValidationError("Invalid email or password.")
+        raise serializers.ValidationError("Invalid email or password or account is not active.")
