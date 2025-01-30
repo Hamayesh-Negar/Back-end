@@ -24,6 +24,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/user/', include('user.urls')),
     path('api/v1/', include('person.urls')),
+    path('auth/', include('authentication.urls')),
     path('api/token/', obtain_auth_token),
     path('health/', views.health_check, name='health-check'),
 ]
