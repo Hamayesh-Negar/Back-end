@@ -1,4 +1,3 @@
-from django.contrib.admin import register
 from django.contrib.auth import logout, login
 from rest_framework import status
 from rest_framework.authtoken.models import Token
