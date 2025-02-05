@@ -40,6 +40,11 @@ class UserViewSet(ModelViewSet):
             return UserChangePasswordSerializer
         return UserSerializer
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'])
     def change_password(self, request, pk=None):
         serializer = self.get_serializer(data=request.data)
