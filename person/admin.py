@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.forms import DateTimeInput
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -143,7 +144,8 @@ class TaskAdmin(ImportExportModelAdmin):
     list_display = (
         'name',
         'conference',
-        'due_date',
+        'started_time',
+        'finished_time',
         'is_required',
         'get_completion_stats',
         'is_active'
@@ -152,10 +154,15 @@ class TaskAdmin(ImportExportModelAdmin):
         'is_active',
         'is_required',
         'conference',
-        'due_date'
+        'started_time',
+        'finished_time',
     )
     search_fields = ('name', 'description', 'conference__name')
-    date_hierarchy = 'due_date'
+
+    formfield_overrides = {
+        Task._meta.get_field('started_time'): {'widget': DateTimeInput(attrs={'type': 'datetime-local'})},
+        Task._meta.get_field('finished_time'): {'widget': DateTimeInput(attrs={'type': 'datetime-local'})},
+    }
 
     def get_completion_stats(self, obj):
         total = obj.assignments.count()

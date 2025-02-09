@@ -96,7 +96,7 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['due_date', 'name']
+        ordering = ['name']
         unique_together = ['conference', 'name']
 
     def __str__(self):
@@ -128,7 +128,7 @@ class PersonTask(models.Model):
     class Meta:
         verbose_name_plural = "person tasks"
         unique_together = ['person', 'task']
-        ordering = ['task__due_date', 'created_at']
+        ordering = ['created_at']
 
     def __str__(self):
         return f"{self.person.get_full_name()} - {self.task.name}"
