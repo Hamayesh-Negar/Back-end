@@ -90,7 +90,8 @@ class Task(models.Model):
     description = models.TextField(null=True, blank=True)
     is_required = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
-    due_date = models.DateTimeField(null=True, blank=True)
+    started_time = models.DateTimeField(null=True, blank=True)
+    finished_time = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
