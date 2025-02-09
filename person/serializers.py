@@ -92,7 +92,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'conference', 'name', 'description', 'is_required',
-            'is_active', 'due_date', 'assignment_count',
+            'is_active', 'started_time', 'finished_time', 'assignment_count',
             'completion_rate', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -109,19 +109,20 @@ class TaskSerializer(serializers.ModelSerializer):
         completed = obj.assignments.filter(status=PersonTask.COMPLETED).count()
         return round((completed / total) * 100, 2)
 
-    @staticmethod
-    def validate_due_date(value):
-        if value and value < timezone.now():
-            raise serializers.ValidationError(
-                "Due date cannot be in the past"
-            )
-        return value
-
     def validate(self, data):
         conference = data['conference']
         name = data['name']
         if Task.objects.filter(conference=conference, name=name).exists():
             raise serializers.ValidationError({"name": "Task with this name already exists in the conference"})
+
+        started_time = data['started_time']
+        finished_time = data['finished_time']
+        if started_time is not None and finished_time is not None:
+            if started_time > finished_time:
+                raise serializers.ValidationError({
+                    "started_time": "Started time cannot be greater than finished time"
+                })
+
         return data
 
 
