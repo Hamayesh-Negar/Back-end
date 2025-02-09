@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.forms import DateTimeInput
+from django.forms import TimeInput
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -160,8 +160,8 @@ class TaskAdmin(ImportExportModelAdmin):
     search_fields = ('name', 'description', 'conference__name')
 
     formfield_overrides = {
-        Task._meta.get_field('started_time'): {'widget': DateTimeInput(attrs={'type': 'datetime-local'})},
-        Task._meta.get_field('finished_time'): {'widget': DateTimeInput(attrs={'type': 'datetime-local'})},
+        Task._meta.get_field('started_time'): {'widget': TimeInput(attrs={'type': 'datetime-local'})},
+        Task._meta.get_field('finished_time'): {'widget': TimeInput(attrs={'type': 'datetime-local'})},
     }
 
     def get_completion_stats(self, obj):
