@@ -223,9 +223,13 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Make sure to create these directories
 os.makedirs(STATIC_ROOT, exist_ok=True)
 os.makedirs(BASE_DIR / 'static', exist_ok=True)
+os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
