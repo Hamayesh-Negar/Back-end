@@ -86,6 +86,14 @@ fi
 
 echo "SSL certificates successfully installed!"
 
+echo "Do you want to setup automatic renewal for the certificates?"
+select yn in "Yes" "No"; do
+    case $yn in
+        Yes ) break;;
+        No ) exit;;
+    esac
+done
+
 # Setup auto-renewal script
 RENEWAL_SCRIPT="$PWD/renew-certs.sh"
 cat > $RENEWAL_SCRIPT << EOL
@@ -115,7 +123,14 @@ EOL
 
 chmod +x $RENEWAL_SCRIPT
 
-# Add cron job for automatic renewal
+echo "Do you want to add a cron job for automatic renewal?"
+select yn in "Yes" "No"; do
+    case $yn in
+        Yes ) break;;
+        No ) exit;;
+    esac
+done
+
 echo "Setting up automatic renewal (requires sudo)..."
 CRON_ENTRY="0 3 * * * $RENEWAL_SCRIPT"
 (sudo crontab -l 2>/dev/null | grep -v "$RENEWAL_SCRIPT" ; echo "$CRON_ENTRY") | sudo crontab -
