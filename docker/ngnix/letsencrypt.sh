@@ -5,6 +5,12 @@
 
 set -e
 
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root or with sudo command."
+    exit
+fi
+
+
 if [ -f "../../.env" ]; then
     source "../../.env"
 else

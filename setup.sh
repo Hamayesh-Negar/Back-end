@@ -5,6 +5,11 @@
 
 set -e
 
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root or with sudo command."
+    exit
+fi
+
 echo "Setting up Hamayesh Negar Docker environment..."
 
 mkdir -p docker/nginx/conf.d
