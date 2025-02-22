@@ -12,13 +12,16 @@ Hamayesh Negar is a comprehensive Django-based conference management system desi
 - 🖥️ **Admin Interface**: Customized Django admin with Jazzmin for improved UX
 - 🔌 **RESTful API**: Comprehensive API for integration with other services or frontend applications
 - 🔐 **Authentication**: Token-based authentication for API access
+- 🐳 **Docker Support**: Easy deployment with Docker and Nginx
 
 ## 🛠️ Tech Stack
 
-- Django 5.1
+- Django
 - Django REST Framework
 - PostgreSQL (configurable)
 - Jazzmin for admin UI enhancement
+- Docker & Docker Compose for containerization
+- Nginx for reverse proxy and SSL termination
 
 ## 📂 Project Structure
 
@@ -31,17 +34,66 @@ The project is organized into several Django apps:
 
 ## 📥 Installation
 
-### 📋 Prerequisites
+You can install Hamayesh Negar either using Docker (recommended) or traditional methods.
 
+### 🐳 Docker Installation (Recommended)
+
+#### Prerequisites
+- Docker and Docker Compose installed on your server
+- Root/sudo access for SSL certificate setup (if using Let's Encrypt)
+
+#### Quick Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Hamayesh-Negar/Back-end.git
+   cd Back-end
+   ```
+
+2. Create your environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Edit the `.env` file to configure your settings:
+   ```bash
+   nano .env
+   ```
+   
+   Important settings to configure:
+   - `DOMAIN` and `EMAIL` for SSL certificates
+   - `USE_LETSENCRYPT` (set to `true` for production)
+   - Database credentials
+   - Django secret key
+
+4. Run the setup script to configure the environment:
+   ```bash
+   sudo ./setup.sh
+   ```
+   This script will:
+   - Create required directories
+   - Set up SSL certificates (Let's Encrypt)
+   - Build Docker containers
+
+5. Start the application:
+   ```bash
+   docker-compose up -d
+   ```
+
+6. Access the application at `https://your-domain.com/admin/`
+
+### 📋 Traditional Installation
+
+#### Prerequisites
 - Python 3.8+
 - PostgreSQL (recommended) or other database
 
-### 🚀 Setup
+#### Setup
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/hamayesh-negar.git
-   cd hamayesh-negar
+   git clone https://github.com/Hamayesh-Negar/Back-end.git
+   cd Back-end
    ```
 
 2. Create and activate a virtual environment:
@@ -84,7 +136,7 @@ The project is organized into several Django apps:
    python manage.py runserver
    ```
 
-8. Access the admin interface at http://localhost:8000/admin/
+8. Access the application at `https://your-domain.com/admin/`
 
 ## 🔗 API Endpoints
 
@@ -110,14 +162,39 @@ The system supports three user roles:
 
 ## 🚢 Deployment
 
-For production deployment, consider the following steps:
+For production deployment, we recommend using Docker with Let's Encrypt SSL certificates:
 
-1. Set `DEBUG=0` in your environment variables
-2. Configure `ALLOWED_HOSTS` with your domain
-3. Use a production-grade server (Gunicorn, uWSGI)
-4. Set up a reverse proxy (Nginx, Apache)
-5. Configure proper database settings
-6. Collect static files:
+1. Configure your `.env` file with production settings.
+
+2. Run the setup script with sudo to obtain and install Let's Encrypt certificates:
+   ```bash
+   sudo ./setup.sh
    ```
-   python manage.py collectstatic
+
+3. Start the services:
+   ```bash
+   docker-compose up -d
    ```
+
+### SSL Certificate Management
+
+The Docker setup includes automatic SSL certificate management:
+
+Let's Encrypt certificates can be automatically obtained and renewed.
+  - Set `USE_LETSENCRYPT=true` in your `.env` file
+  - Certificates will be automatically renewed before expiry
+
+## 🛠️ Development
+
+For local development, you can use either method:
+
+### Docker-based Development
+
+1. Set `DEBUG=1` in your `.env` file
+2. Use `USE_LETSENCRYPT=false` to use self-signed certificates
+3. Start the containers: `docker-compose up`
+
+### Traditional Development
+
+1. Use virtual environment and run `python manage.py runserver`
+2. Configure your `.env` file with local database settings
