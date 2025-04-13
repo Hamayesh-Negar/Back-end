@@ -192,6 +192,8 @@ class PersonTaskViewSet(ModelViewSet):
         if pk:
             return PersonTask.objects.filter(id=pk)
 
+        return PersonTask.objects.all()
+
     @action(detail=True, methods=['post'])
     def mark_completed(self, request, pk=None):
         person_task = self.get_object()
