@@ -50,6 +50,26 @@ class PersonViewSet(ModelViewSet):
         }
         return Response(summary)
 
+    @action(detail=False, methods=['post'])
+    def validate_unique_code(self, request):
+        unique_code = request.data.get('unique_code')
+
+        if not unique_code:
+            return Response(
+                {"error": "Unique code is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            person = Person.objects.get(unique_code=unique_code)
+            serializer = self.get_serializer(person)
+            return Response(serializer.data)
+        except Person.DoesNotExist:
+            return Response(
+                {"error": "Invalid unique code. Person not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 
 class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
