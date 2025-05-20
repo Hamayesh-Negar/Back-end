@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.forms import TimeInput
+from django.forms import TimeInput, ModelForm, ModelMultipleChoiceField, CheckboxSelectMultiple
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -33,7 +33,8 @@ class CategoryAdmin(admin.ModelAdmin):
 
     def get_members_count(self, obj):
         count = obj.members.count()
-        url = reverse('admin:person_person_changelist') + f'?categories__id={obj.id}'
+        url = reverse('admin:person_person_changelist') + \
+            f'?categories__id={obj.id}'
         return format_html('<a href="{}">{} members</a>', url, count)
 
     get_members_count.short_description = 'Members'
@@ -50,8 +51,38 @@ class PersonTaskInline(admin.TabularInline):
         return qs.select_related('task', 'completed_by')
 
 
+class PersonAdminForm(ModelForm):
+    tasks = ModelMultipleChoiceField(
+        queryset=Task.objects.all(),
+        widget=CheckboxSelectMultiple,
+        required=False,
+        help_text="Select tasks to assign to this person"
+    )
+
+    class Meta:
+        model = Person
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super(PersonAdminForm, self).__init__(*args, **kwargs)
+        if self.instance.pk and hasattr(self.fields, 'tasks'):
+            # For existing persons, show currently assigned tasks
+            self.fields['tasks'].initial = Task.objects.filter(
+                assignments__person=self.instance
+            )
+        elif 'conference' in self.data and hasattr(self.fields, 'tasks'):
+            # Filter tasks by the selected conference
+            conference_id = self.data.get('conference')
+            if conference_id:
+                self.fields['tasks'].queryset = Task.objects.filter(
+                    conference_id=conference_id,
+                    is_active=True
+                )
+
+
 @admin.register(Person)
 class PersonAdmin(ImportExportModelAdmin):
+    form = PersonAdminForm
     list_display = (
         'full_name',
         'conference_link',
@@ -63,8 +94,10 @@ class PersonAdmin(ImportExportModelAdmin):
         'is_active'
     )
     list_filter = ('is_active', 'conference', 'categories', 'created_at')
-    search_fields = ('first_name', 'last_name', 'email', 'telephone', 'unique_code')
-    readonly_fields = ('hashed_unique_code', 'registered_by', 'created_at', 'updated_at')
+    search_fields = ('first_name', 'last_name', 'email',
+                     'telephone', 'unique_code')
+    readonly_fields = ('hashed_unique_code', 'registered_by',
+                       'created_at', 'updated_at')
     inlines = [PersonTaskInline]
 
     def full_name(self, obj):
@@ -73,7 +106,8 @@ class PersonAdmin(ImportExportModelAdmin):
     full_name.short_description = 'Name'
 
     def conference_link(self, obj):
-        url = reverse('admin:conference_conference_change', args=[obj.conference.id])
+        url = reverse('admin:conference_conference_change',
+                      args=[obj.conference.id])
         return mark_safe(f'<a href="{url}">{obj.conference.name}</a>')
 
     conference_link.short_description = 'Conference'
@@ -122,6 +156,22 @@ class PersonAdmin(ImportExportModelAdmin):
             obj.registered_by = request.user
         obj.save()
 
+        # Handle task assignments
+        if 'tasks' in form.cleaned_data:
+            selected_tasks = form.cleaned_data['tasks']
+
+            # Create PersonTask objects for newly selected tasks
+            for task in selected_tasks:
+                PersonTask.objects.get_or_create(
+                    person=obj,
+                    task=task,
+                    defaults={'status': PersonTask.PENDING}
+                )
+
+            # Optionally remove tasks that were deselected (only for existing persons)
+            if change:
+                obj.tasks.exclude(task__in=selected_tasks).delete()
+
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
         for obj in instances:
@@ -135,6 +185,7 @@ class PersonAdmin(ImportExportModelAdmin):
         css = {
             'all': ('css/custom_admin.css',)
         }
+        js = ('js/person_admin.js',)
 
 
 @admin.register(Task)
