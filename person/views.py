@@ -81,6 +81,11 @@ class PersonViewSet(ModelViewSet):
             return Response({
                 'error': 'Person with this unique code does not exist'})
 
+        if not person.is_active:
+            return Response({
+                'error': 'Person is not active or not registered for this conference'
+            })
+
         try:
             task = Task.objects.get(id=task_id)
         except Task.DoesNotExist:
