@@ -1,4 +1,5 @@
 from unicodedata import category
+from django.utils import timezone
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -55,20 +56,63 @@ class PersonViewSet(ModelViewSet):
         unique_code = request.data.get('unique_code')
 
         if not unique_code:
-            return Response(
-                {"error": "Unique code is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'unique_code is required'})
 
         try:
             person = Person.objects.get(unique_code=unique_code)
             serializer = self.get_serializer(person)
             return Response(serializer.data)
         except Person.DoesNotExist:
-            return Response(
-                {"error": "Invalid unique code. Person not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'Person with this unique code does not exist'})
+
+    @action(detail=False, methods=['post'])
+    def submit_task(self, request):
+        unique_code = request.data.get('unique_code')
+        task_id = request.data.get('task_id')
+
+        if not unique_code or not task_id:
+            return Response({
+                'error': 'Both unique_code and task_id are required'
+            })
+
+        try:
+            person = Person.objects.get(unique_code=unique_code)
+        except Person.DoesNotExist:
+            return Response({
+                'error': 'Person with this unique code does not exist'})
+
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            return Response({
+                'error': 'Task with this ID does not exist'})
+
+        try:
+            person_task = PersonTask.objects.get(person=person, task=task)
+        except PersonTask.DoesNotExist:
+            return Response({
+                'error': 'This task is not assigned to this person'})
+
+        if person_task.status == PersonTask.COMPLETED:
+            return Response({
+                'error': 'This task has already been completed by this person',
+                'person_task': PersonTaskSerializer(person_task).data})
+
+        # Mark the task as completed
+        person_task.status = PersonTask.COMPLETED
+        person_task.completed_at = timezone.now()
+
+        # If this is an authenticated request, record who completed it
+        if request.user and request.user.is_authenticated:
+            person_task.completed_by = request.user
+
+        person_task.save()
+
+        return Response({
+            'success': True,
+            'message': f'Task "{task.name}" has been successfully completed for {person.get_full_name()}',
+            'person_task': PersonTaskSerializer(person_task).data
+        })
 
 
 class CategoryViewSet(ModelViewSet):
