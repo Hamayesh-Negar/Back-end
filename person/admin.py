@@ -199,6 +199,7 @@ class TaskAdmin(ImportExportModelAdmin):
         'finished_time',
         'is_required',
         'get_completion_stats',
+        'get_total_completion_stats',
         'is_active'
     )
     list_filter = (
@@ -242,6 +243,38 @@ class TaskAdmin(ImportExportModelAdmin):
         )
 
     get_completion_stats.short_description = 'Completion'
+
+    def get_total_completion_stats(self, obj):
+        # Get the total assignments and completed assignments for this specific task
+        from .models import PersonTask
+
+        total_assignments = obj.assignments.count()
+
+        completed_assignments = obj.assignments.filter(
+            status=PersonTask.COMPLETED
+        ).count()
+
+        if not total_assignments:
+            return mark_safe('<span class="badge badge-secondary">Not assigned</span>')
+
+        percentage = (completed_assignments / total_assignments) * 100
+
+        if percentage == 100:
+            color = 'success'
+        elif percentage >= 50:
+            color = 'warning'
+        else:
+            color = 'danger'
+
+        return mark_safe(
+            f'''
+            <span class="badge badge-{color}">
+                {completed_assignments}/{total_assignments} ({int(percentage)}%)
+            </span>
+            '''
+        )
+
+    get_total_completion_stats.short_description = 'Task Completion'
 
 
 @admin.register(PersonTask)
