@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conference QR Code</title>
+    <style>
+      @font-face {
+        font-family: "Vazirmatn";
+        src: url("https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-Regular.woff2")
+          format("woff2");
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      * {
+        direction: rtl;
+        text-align: right;
+      }
+
+      body {
+        font-family: "Vazirmatn", Tahoma, Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+        color: #333;
+        unicode-bidi: embed;
+      }
+
+      .ltr {
+        direction: ltr;
+        text-align: left;
+        unicode-bidi: embed;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .header {
+        text-align: center !important;
+        margin-bottom: 20px;
+      }
+
+      .qr-container {
+        text-align: center !important;
+        margin: 30px 0;
+      }
+
+      .qr-code {
+        display: none;
+        max-width: 300px;
+        margin: 0 auto;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+      }
+
+      .button {
+        background-color: #4caf50;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 10px 0;
+        text-align: center !important;
+        text-decoration: none;
+        display: inline-block;
+        font-family: inherit;
+      }
+
+      .button:hover {
+        background-color: #45a049;
+      }
+
+      p {
+        margin: 8px 0;
+        unicode-bidi: embed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>QR کد خلاقیت و نشاط</h2>
+      </div>
+
+      <p>‫سلام {{first_name}} 👋‬</p>
+      <p>‫اینم QR کدی که برای خلاقیت و نشاط لازمه!‬</p>
+      <p>‫✅ نیازی به پرینت نیست‬</p>
+      <p>‫📱 فقط عکسشو تو گوشیت داشته باش، کافیه!‬</p>
+      <p>‫آماده باش، چون قراره حسابی حال کنیم 😎🎉‬</p>
+      <p class="ltr">Let's gooo!</p>
+
+      <div class="qr-container">
+        <button class="button" onclick="toggleQR()">‫نمایش QR کد‬</button>
+        <div id="qr-code" class="qr-code">
+          <img
+            src="data:image/png;base64,{{qr_code}}"
+            alt="QR Code"
+            style="max-width: 100%"
+          />
+          <p>
+            <a
+              href="data:image/png;base64,{{qr_code}}"
+              download="{{person_name}}_qrcode.png"
+              class="button"
+            >
+              ‫دانلود QR کد‬
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function toggleQR() {
+        var qrCode = document.getElementById("qr-code");
+        if (qrCode.style.display === "none" || qrCode.style.display === "") {
+          qrCode.style.display = "block";
+        } else {
+          qrCode.style.display = "none";
+        }
+      }
+    </script>
+  </body>
+</html>

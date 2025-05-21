@@ -76,7 +76,8 @@ JAZZMIN_SETTINGS = {
     "search_model": ["user.User", "person.Person"],
     "user_avatar": None,
     "topmenu_links": [
-        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Home", "url": "admin:index",
+            "permissions": ["auth.view_user"]},
         {"model": "user.User"},
         {"model": "conference.Conference"},
     ],
@@ -151,8 +152,7 @@ ROOT_URLCONF = 'Hamayesh_Negar_django.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -237,3 +237,12 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Email Configuration for Gmail
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 's.a.eftekhari.b@gmail.com'
+EMAIL_HOST_PASSWORD = 'nncl snac piud xrxy '
+DEFAULT_FROM_EMAIL = 'Hello <s.a.eftekhari.b@gmail.com>'
