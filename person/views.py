@@ -67,16 +67,16 @@ class PersonViewSet(ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def submit_task(self, request):
-        unique_code = request.data.get('unique_code')
+        hashed_unique_code = request.data.get('hashed_unique_code')
         task_id = request.data.get('task_id')
 
-        if not unique_code or not task_id:
+        if not hashed_unique_code or not task_id:
             return Response({
                 'error': 'Both unique_code and task_id are required'
             })
 
         try:
-            person = Person.objects.get(unique_code=unique_code)
+            person = Person.objects.get(hashed_unique_code=hashed_unique_code)
         except Person.DoesNotExist:
             return Response({
                 'error': 'Person with this unique code does not exist'})
@@ -103,11 +103,9 @@ class PersonViewSet(ModelViewSet):
                 'error': 'This task has already been completed by this person',
                 'person_task': PersonTaskSerializer(person_task).data})
 
-        # Mark the task as completed
         person_task.status = PersonTask.COMPLETED
         person_task.completed_at = timezone.now()
 
-        # If this is an authenticated request, record who completed it
         if request.user and request.user.is_authenticated:
             person_task.completed_by = request.user
 
