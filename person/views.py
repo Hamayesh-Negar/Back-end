@@ -63,7 +63,7 @@ class PersonViewSet(ModelViewSet):
             serializer = self.get_serializer(person)
             return Response(serializer.data)
         except Person.DoesNotExist:
-            return Response({'error': 'Person with this unique code does not exist'})
+            return Response({'error': 'Person with this unique code does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['post'])
     def submit_task(self, request):
