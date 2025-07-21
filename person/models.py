@@ -26,6 +26,12 @@ class Category(models.Model):
 
 
 class Person(models.Model):
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+        ('unknown', 'Unknown'),
+    ]
     conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name='attendees')
     categories = models.ManyToManyField('Category', related_name='members')
     unique_code = models.CharField(
@@ -43,6 +49,7 @@ class Person(models.Model):
     last_name = models.CharField(max_length=64)
     telephone = models.CharField(max_length=24, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default='male')
     is_active = models.BooleanField(default=True)
     registered_by = models.ForeignKey('user.User', on_delete=models.SET_NULL, null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)

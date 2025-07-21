@@ -25,11 +25,11 @@ class PersonViewSet(ModelViewSet):
     pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
-        conference = self.kwargs.get('conference_slug')
+        conference_slug = self.kwargs.get('conference_slug')
         category_pk = self.kwargs.get('category_pk')
-        if conference:
-            return Person.objects.filter(conference_id=conference)
-        if category:
+        if conference_slug:
+            return Person.objects.filter(conference__slug=conference_slug)
+        if category_pk:
             return Person.objects.filter(categories__id=category_pk)
         return Person.objects.all()
 
