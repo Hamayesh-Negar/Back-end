@@ -11,12 +11,12 @@ from rest_framework.viewsets import ModelViewSet
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
-from user.permissions import IsHamayeshManager, IsSuperuser
+from user.permissions import IsHamayeshManager, IsHamayeshYar
 
 
 class PersonViewSet(ModelViewSet):
     serializer_class = PersonSerializer
-    # permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
+    permission_classes = [IsAuthenticated, IsHamayeshYar]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
@@ -33,12 +33,18 @@ class PersonViewSet(ModelViewSet):
             return Person.objects.filter(categories__id=category_pk)
         return Person.objects.all()
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsHamayeshManager])
     def toggle_active(self, request, pk=None):
         person = self.get_object()
         person.is_active = not person.is_active
         person.save()
-        return Response(self.get_serializer(person).data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Person status updated successfully',
+                'person': self.get_serializer(person).data
+            }
+        )
 
     @action(detail=True, methods=['get'])
     def tasks_summary(self, request, pk=None):
@@ -53,26 +59,31 @@ class PersonViewSet(ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def validate_unique_code(self, request):
-        unique_code = request.data.get('unique_code')
+        hashed_unique_code = request.data.get('hashed_unique_code')
 
-        if not unique_code:
-            return Response({'error': 'unique_code is required'})
+        if not hashed_unique_code:
+            return Response({'error': 'hashed_unique_code is required'})
 
         try:
-            person = Person.objects.get(unique_code=unique_code)
+            person = Person.objects.get(hashed_unique_code=hashed_unique_code)
             serializer = self.get_serializer(person)
             return Response(serializer.data)
         except Person.DoesNotExist:
-            return Response({'error': 'Person with this unique code does not exist'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Person with this hashed unique code does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['post'])
     def submit_task(self, request):
         hashed_unique_code = request.data.get('hashed_unique_code')
         task_id = request.data.get('task_id')
 
-        if not hashed_unique_code or not task_id:
+        if not hashed_unique_code:
             return Response({
-                'error': 'Both unique_code and task_id are required'
+                'error': 'unique_code is required'
+            })
+
+        if not task_id:
+            return Response({
+                'error': 'task_id is required'
             })
 
         try:
@@ -83,7 +94,7 @@ class PersonViewSet(ModelViewSet):
 
         if not person.is_active:
             return Response({
-                'error': 'Person is not active or not registered for this conference'
+                'error': 'Person is not active, Please contact the conference manager'
             })
 
         try:
@@ -100,7 +111,7 @@ class PersonViewSet(ModelViewSet):
 
         if person_task.status == PersonTask.COMPLETED:
             return Response({
-                'error': 'This task has already been completed by this person',
+                'error': 'This task has already been completed',
                 'person_task': PersonTaskSerializer(person_task).data})
 
         person_task.status = PersonTask.COMPLETED
@@ -120,7 +131,7 @@ class PersonViewSet(ModelViewSet):
 
 class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated, IsHamayeshManager]
+    permission_classes = [IsAuthenticated, IsHamayeshYar]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
@@ -145,7 +156,11 @@ class CategoryViewSet(ModelViewSet):
         )
 
         category.members.add(*persons)
-        return Response({'status': 'Members added successfully'})
+        return Response({
+            'success': True,
+            'message': 'Members added successfully',
+            'category': self.get_serializer(category).data
+        })
 
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
@@ -158,7 +173,10 @@ class CategoryViewSet(ModelViewSet):
         instance = self.get_object()
         if instance.members.exists():
             return Response(
-                {"detail": "Cannot delete category with existing members"},
+                {
+                    'success': False,
+                    'message': 'Cannot delete category with existing members'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
         return super().destroy(request, *args, **kwargs)
@@ -166,7 +184,7 @@ class CategoryViewSet(ModelViewSet):
 
 class TaskViewSet(ModelViewSet):
     serializer_class = TaskSerializer
-    # permission_classes = [IsAuthenticated, IsHamayeshManager, IsSuperuser]
+    permission_classes = [IsAuthenticated, IsHamayeshYar]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
@@ -244,11 +262,11 @@ class TaskViewSet(ModelViewSet):
 
 class PersonTaskViewSet(ModelViewSet):
     serializer_class = PersonTaskSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsHamayeshYar]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'person', 'task']
     ordering_fields = ['created_at', 'completed_at']
-    # pagination_class = StandardResultsSetPagination
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         pk = self.kwargs.get('task_pk')
@@ -266,10 +284,16 @@ class PersonTaskViewSet(ModelViewSet):
         person_task = self.get_object()
         if person_task.status == PersonTask.COMPLETED:
             return Response(
-                {'error': 'Task is already completed'},
+                {'error': 'This task is already completed'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         person_task.mark_completed(request.user)
         serializer = self.get_serializer(person_task)
-        return Response(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Task marked as completed',
+                'person_task': serializer.data
+            }
+        )
