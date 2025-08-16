@@ -5,19 +5,20 @@ from django.db import models
 
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, email, phone, password=None, **extra_fields):
-        if not email:
-            raise ValueError('The Email field must be set')
-        if not phone:
-            raise ValueError('The Phone field must be set')
+    def create_user(self, username, email=None, phone=None, password=None, **extra_fields):
+        if not username:
+            raise ValueError('The Username field must be set')
 
-        email = self.normalize_email(email)
-        user = self.model(email=email, phone=phone, **extra_fields)
+        username = username.lower()
+        if email:
+            email = self.normalize_email(email)
+        user = self.model(username=username, email=email,
+                          phone=phone, **extra_fields)
         user.set_password(password)
         user.save()
         return user
 
-    def create_superuser(self, email, phone, password=None, **extra_fields):
+    def create_superuser(self, username, email=None, phone=None, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('user_type', User.UserType.SUPER_USER)
@@ -27,46 +28,57 @@ class CustomUserManager(BaseUserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
-        return self.create_user(email=email, phone=phone, password=password, **extra_fields)
+        return self.create_user(username=username, email=email, phone=phone, password=password, **extra_fields)
 
-    def create_hamayesh_manager(self, email, phone, password=None, **extra_fields):
+    def create_hamayesh_manager(self, username, email=None, phone=None, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', False)
         extra_fields.setdefault('user_type', User.UserType.HAMAYESH_MANAGER)
-        return self.create_user(email=email, phone=phone, password=password, **extra_fields)
+        return self.create_user(username=username, email=email, phone=phone, password=password, **extra_fields)
 
-    def create_hamayesh_yar(self, email, phone, password=None, **extra_fields):
+    def create_hamayesh_yar(self, username, email=None, phone=None, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
         extra_fields.setdefault('user_type', User.UserType.HAMAYESH_YAR)
-        return self.create_user(email=email, phone=phone, password=password, **extra_fields)
+        return self.create_user(username=username, email=email, phone=phone, password=password, **extra_fields)
+
+    def create_normal_user(self, username, email=None, phone=None, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
+        extra_fields.setdefault('user_type', User.UserType.NORMAL_USER)
+        return self.create_user(username=username, email=email, phone=phone, password=password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    class UserType(models.TextChoices):
-        SUPER_USER = 'SU', 'SUPER_USER'
-        HAMAYESH_MANAGER = 'HM', 'HAMAYESH_MANAGER'
-        HAMAYESH_YAR = 'HY', 'HAMAYESH_YAR'
+    class UserType(models.IntegerChoices):
+        NORMAL_USER = 1, 'NORMAL_USER'
+        HAMAYESH_YAR = 2, 'HAMAYESH_YAR'
+        HAMAYESH_MANAGER = 3, 'HAMAYESH_MANAGER'
+        SUPER_USER = 4, 'SUPER_USER'
 
-    email = models.EmailField(unique=True, help_text='Email')
+    username = models.CharField(
+        max_length=150, unique=True, help_text='Username')
+    email = models.EmailField(blank=True, null=True, help_text='Email')
     phone = models.CharField(
-        max_length=20,
-        unique=True,
-        help_text='Phone number, format: +980123456789',
+        max_length=15,
+        blank=True,
+        null=True,
+        help_text='Phone number, format: +989XXXXXXXXX',
         validators=[
             RegexValidator(
-                regex=r'^\+?1?\d{9,15}$',
-                message="Mobile number must be entered in the format: '+980123456789'. Up to 15 digits allowed."
+                regex=r'^(\+\d{1,2})9(\d{9})$',
+                message="Mobile number must be entered in the format: '+989XXXXXXXXX'."
             )
         ])
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
-    user_type = models.CharField(max_length=2, choices=UserType, default=UserType.HAMAYESH_YAR)
+    user_type = models.IntegerField(
+        choices=UserType.choices, default=UserType.NORMAL_USER)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(auto_now_add=True)
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['phone']
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = []
     objects = CustomUserManager()
 
     class Meta:
@@ -75,6 +87,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def is_normal_user(self):
+        return self.user_type == User.UserType.NORMAL_USER
 
     @property
     def is_hamayesh_manager(self):
