@@ -9,7 +9,7 @@ from user.models import User
 class UserSerializer(ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name',
+        fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'phone', 'user_type', 'is_active', 'date_joined']
 
 
@@ -19,11 +19,22 @@ class UserBaseSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'phone', 'first_name', 'last_name',
-            'full_name', 'user_type', 'user_type',
+            'id', 'username', 'email', 'phone', 'first_name', 'last_name',
+            'full_name', 'user_type',
             'is_active', 'date_joined'
         ]
         read_only_fields = ['date_joined']
+
+    def validate_username(self, value):
+        if value:
+            normalized_username = value.lower().strip()
+            if User.objects.filter(username=normalized_username).exclude(
+                    id=getattr(self.instance, 'id', None)
+            ).exists():
+                raise serializers.ValidationError(
+                    "This username is already in use.")
+            return normalized_username
+        return value
 
     def validate_phone(self, value):
         if value:
@@ -34,7 +45,8 @@ class UserBaseSerializer(ModelSerializer):
             if User.objects.filter(phone=normalized_phone).exclude(
                     id=getattr(self.instance, 'id', None)
             ).exists():
-                raise serializers.ValidationError("This phone number is already in use.")
+                raise serializers.ValidationError(
+                    "This phone number is already in use.")
 
             return normalized_phone
         return value
@@ -45,17 +57,22 @@ class UserBaseSerializer(ModelSerializer):
             if User.objects.filter(email=normalized_email).exclude(
                     id=getattr(self.instance, 'id', None)
             ).exists():
-                raise serializers.ValidationError("This email is already in use.")
+                raise serializers.ValidationError(
+                    "This email is already in use.")
             return normalized_email
         return value
 
 
 class UserCreateSerializer(UserBaseSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    confirm_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True, required=True, style={
+                                     'input_type': 'password'})
+    confirm_password = serializers.CharField(
+        write_only=True, required=True, style={'input_type': 'password'})
+    username = serializers.CharField(required=True)
 
     class Meta(UserBaseSerializer.Meta):
-        fields = UserBaseSerializer.Meta.fields + ['password', 'confirm_password']
+        fields = UserBaseSerializer.Meta.fields + \
+            ['password', 'confirm_password']
 
     def validate(self, data):
         if data.get('password') != data.get('confirm_password'):
@@ -73,13 +90,13 @@ class UserCreateSerializer(UserBaseSerializer):
         request = self.context.get('request')
         if request and request.user:
             creating_user = request.user
-            requested_type = data.get('user_type')
+            requested_type = data.get('user_type', User.UserType.NORMAL_USER)
 
             if not creating_user.is_superuser:
                 if creating_user.is_hamayesh_manager:
-                    if requested_type not in [User.UserType.HAMAYESH_YAR]:
+                    if requested_type not in [User.UserType.HAMAYESH_YAR, User.UserType.NORMAL_USER]:
                         raise serializers.ValidationError({
-                            'user_type': "Hamayesh managers can only create Hamayesh Yar accounts."
+                            'user_type': "Hamayesh managers can only create Hamayesh Yar or Normal User accounts."
                         })
                 else:
                     raise serializers.ValidationError({
@@ -90,25 +107,62 @@ class UserCreateSerializer(UserBaseSerializer):
 
     def create(self, validated_data):
         validated_data.pop('confirm_password')
-        user_type = validated_data.get('user_type')
+        user_type = validated_data.get('user_type', User.UserType.NORMAL_USER)
 
         if user_type == User.UserType.HAMAYESH_MANAGER:
             user = User.objects.create_hamayesh_manager(**validated_data)
         elif user_type == User.UserType.HAMAYESH_YAR:
             user = User.objects.create_hamayesh_yar(**validated_data)
+        elif user_type == User.UserType.NORMAL_USER:
+            user = User.objects.create_normal_user(**validated_data)
         else:
             user = User.objects.create_user(**validated_data)
 
         return user
 
 
+class UserUpdateSerializer(UserBaseSerializer):
+    """
+    Serializer for updating user information with permission-based field restrictions.
+    """
+
+    class Meta(UserBaseSerializer.Meta):
+        fields = [
+            'id', 'username', 'email', 'phone', 'first_name', 'last_name',
+            'full_name', 'is_active', 'date_joined'
+        ]
+        read_only_fields = ['date_joined', 'full_name']
+
+    def validate(self, data):
+        request = self.context.get('request')
+        if request and request.user:
+            updating_user = request.user
+            target_user = self.instance
+
+            if target_user != updating_user and not updating_user.is_superuser and not updating_user.is_hamayesh_manager:
+                raise serializers.ValidationError({
+                    'detail': "You can only update your own profile."
+                })
+
+            if 'is_active' in data:
+                if not (updating_user.is_superuser or updating_user.is_hamayesh_manager):
+                    raise serializers.ValidationError({
+                        'is_active': "You don't have permission to change active status."
+                    })
+
+        return data
+
+
 class UserChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True, style={'input_type': 'password'})
-    new_password = serializers.CharField(required=True, style={'input_type': 'password'})
-    confirm_new_password = serializers.CharField(required=True, style={'input_type': 'password'})
+    old_password = serializers.CharField(
+        required=True, style={'input_type': 'password'})
+    new_password = serializers.CharField(
+        required=True, style={'input_type': 'password'})
+    confirm_new_password = serializers.CharField(
+        required=True, style={'input_type': 'password'})
 
     def validate_old_password(self, value):
-        user = self.context['request'].user
+        user = self.context.get('user') or self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Old password is incorrect.")
         return value
@@ -123,12 +177,12 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get('new_password') != data.get('confirm_new_password'):
             raise serializers.ValidationError({
-                'detail': "Passwords do not match."
+                'confirm_new_password': "Passwords do not match."
             })
         return data
 
     def save(self, **kwargs):
-        user = self.context['request'].user
+        user = self.context.get('user') or self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
