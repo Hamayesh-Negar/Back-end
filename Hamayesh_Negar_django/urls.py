@@ -16,15 +16,21 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework.authtoken.views import obtain_auth_token
+from django.conf.urls.static import static
 
+from Hamayesh_Negar_django import settings
 from Hamayesh_Negar_django.views import HealthCheckView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/management/', include('person.urls')),
     path('api/v1/user/', include('user.urls')),
-    path('api/v1/', include('person.urls')),
     path('auth/', include('authentication.urls')),
-    path('api/token/', obtain_auth_token),
     path('health/', HealthCheckView.as_view(), name='health-check'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL,
+                          document_root=settings.STATIC_ROOT)

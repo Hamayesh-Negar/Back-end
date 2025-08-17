@@ -30,7 +30,6 @@ DEBUG = int(os.environ.get('DEBUG'))
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS').split(' ')
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -66,7 +65,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-
 JAZZMIN_SETTINGS = {
     "site_title": "Hamayesh Negar Admin",
     "site_header": "Hamayesh Negar",
@@ -76,7 +74,8 @@ JAZZMIN_SETTINGS = {
     "search_model": ["user.User", "person.Person"],
     "user_avatar": None,
     "topmenu_links": [
-        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Home", "url": "admin:index",
+            "permissions": ["auth.view_user"]},
         {"model": "user.User"},
         {"model": "conference.Conference"},
     ],
@@ -151,8 +150,7 @@ ROOT_URLCONF = 'Hamayesh_Negar_django.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -237,4 +235,3 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
