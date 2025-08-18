@@ -23,10 +23,16 @@ from Hamayesh_Negar_django.views import HealthCheckView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/v1/management/', include('person.urls')),
-    path('api/v1/user/', include('user.urls')),
-    path('auth/', include('authentication.urls')),
+    path('auth/', include('authentication.urls'), name='authentication'),
     path('health/', HealthCheckView.as_view(), name='health-check'),
+
+    path("api/v1/", include(
+        [
+            path('user/', include('user.urls'), name='user'),
+            path("conference/", include('conference.urls'), name='conference'),
+            path("attendee/", include('person.urls'), name='person')
+        ]
+    ))
 ]
 
 if settings.DEBUG:
