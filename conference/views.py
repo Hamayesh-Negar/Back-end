@@ -1,43 +1,62 @@
 from typing import Union, cast
 
+from django.db import models
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters
+from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from conference.models import Conference
-from conference.serializers import ConferenceSerializer
+from conference.models import Conference, ConferenceRole, ConferenceMember, ConferenceInvitation, ConferencePermission
+from conference.serializers import (
+    ConferenceDetailSerializer, ConferenceSerializer, ConferenceRoleSerializer, ConferenceMemberSerializer,
+    ConferenceInvitationSerializer, ConferencePermissionSerializer
+)
+from conference.permissions import (
+    ConferencePermissionMixin, ConferenceSecretaryRequiredMixin,
+    ConferenceExecutiveRequiredMixin
+)
 from person.serializers import CategorySerializer
-from user.permissions import CanEditAllFields, CanEditBasicFields
+from user.permissions import IsSuperuser
 
 
-class ConferenceViewSet(ModelViewSet):
-    serializer_class = ConferenceSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filtetset_fields = ['is_active']
+class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
+    filter_backends = [DjangoFilterBackend,
+                       filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
     search_fields = ['name', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['start_date', 'end_date']
     lookup_field = 'slug'
     lookup_value_regex = '[0-9]+|[a-zA-Z0-9-]+'
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return ConferenceDetailSerializer
+        return ConferenceSerializer
 
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser:
             return Conference.objects.all()
-        return Conference.objects.filter(created_by=user)
+
+        user_conferences = Conference.objects.filter(
+            models.Q(created_by=user) |
+            models.Q(members__user=user, members__status='active')
+        ).distinct()
+
+        return user_conferences
 
     def get_object(self):
-        """
-        Get object by either slug or pk
-        """
         queryset = self.get_queryset()
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         lookup_value = self.kwargs[lookup_url_kwarg]
-        typed_queryset = cast(Union[QuerySet[Conference], type[Conference]], queryset)
+        typed_queryset = cast(
+            Union[QuerySet[Conference], type[Conference]], queryset)
 
         try:
             lookup_value = int(lookup_value)
@@ -48,8 +67,8 @@ class ConferenceViewSet(ModelViewSet):
         self.check_object_permissions(self.request, obj)
         return obj
 
-    @action(detail=False, methods=['get'])
-    def active(self, request):
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperuser])
+    def active_conferences(self, request):
         queryset = self.get_queryset().filter(is_active=True)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
@@ -57,41 +76,279 @@ class ConferenceViewSet(ModelViewSet):
     @action(detail=True, methods=['get'])
     def categories(self, request, slug=None):
         conference = self.get_object()
+
+        if not conference.enable_categorization:
+            return Response({'detail': 'Categorization is not enabled for this conference.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('view_conference', conference):
+            return Response({'detail': 'You do not have permission to view this conference.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
         categories = conference.categories
         serializer = CategorySerializer(categories, many=True)
         return Response(serializer.data)
 
-    def get_permissions(self):
-        if self.request.user.has_perm('conference.edit_all_fields'):
-            permission_classes = [IsAuthenticated, CanEditAllFields]
-        else:
-            permission_classes = [IsAuthenticated, CanEditBasicFields]
-        return [permission() for permission in permission_classes]
-
     @action(detail=True, methods=['get'])
     def statistics(self, request, slug=None):
         conference = self.get_object()
-        sets = {
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('view_reports', conference):
+            return Response({'detail': 'You do not have permission to view reports.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        stats = {
             'total_attendees': conference.attendees.count(),
             'total_tasks': conference.tasks.count(),
             'total_categories': conference.categories.count(),
+            'total_members': conference.members.filter(status='active').count(),
+            'total_active_members': conference.members.filter(status='active').count(),
+            'total_inactive_members': conference.members.filter(status='inactive').count(),
+            'total_suspended_members': conference.members.filter(status='suspended').count(),
+            'executives': conference.members.filter(
+                role__role_type__in=['secretary', 'deputy', 'assistant'],
+                status='active'
+            ).count(),
         }
-        return Response(sets)
+        return Response(stats)
+
+    @action(detail=True, methods=['get'])
+    def members(self, request, slug=None):
+        conference = self.get_object()
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('view_conference', conference):
+            return Response({'detail': 'You do not have permission to view members.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        members = conference.members.select_related(
+            'user', 'role')
+        serializer = ConferenceMemberSerializer(members, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def invite_member(self, request, slug=None):
+        conference = self.get_object()
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('invite_members', conference):
+            return Response({'detail': 'You do not have permission to invite members.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ConferenceInvitationSerializer(
+            data=request.data, context={'request': request})
+        serializer.validated_data['conference'] = conference
+        serializer.validated_data['invited_by'] = request.user
+
+        if serializer.is_valid():
+            invitation = serializer.save()
+            return Response(ConferenceInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response({'detail': 'You do not have permission to perform this action.'},
-                            status=403)
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        if not request.user.is_superuser or request.user.is_hamayesh_manager:
-            return Response({'detail': 'You do not have permission to perform this action.'},
-                            status=403)
+        conference = self.get_object()
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('edit_conference', conference):
+            return Response({'detail': 'You do not have permission to edit this conference.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response({'detail': 'You do not have permission to perform this action.'},
-                            status=403)
+        conference = self.get_object()
+
+        status_message = self.check_member_status(conference)
+        if status_message:
+            return Response({'detail': status_message}, status=status.HTTP_403_FORBIDDEN)
+
+        if not self.has_conference_permission('delete_conference', conference):
+            return Response({'detail': 'You do not have permission to delete this conference.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
         return super().destroy(request, *args, **kwargs)
+
+
+class ConferenceRoleViewSet(ConferenceSecretaryRequiredMixin, ModelViewSet):
+    """ViewSet for managing conference roles - Secretary only"""
+    serializer_class = ConferenceRoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        conference = self.kwargs.get('conference_slug')
+        if conference:
+            return ConferenceRole.objects.filter(conference_id=conference)
+        return ConferenceRole.objects.none()
+
+    def perform_create(self, serializer):
+        conference_id = self.kwargs.get('conference_id')
+        conference = get_object_or_404(Conference, pk=conference_id)
+        serializer.save(conference=conference)
+
+
+class ConferencePermissionViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
+    """ViewSet for viewing conference permissions"""
+    serializer_class = ConferencePermissionSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get']
+
+    def get_queryset(self):
+        conference = self.kwargs.get('conference_slug')
+        if conference:
+            return ConferencePermission.objects.filter(roles__conference=conference)
+        return ConferencePermission.objects.none()
+
+
+class ConferenceMemberViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
+    """ViewSet for managing conference members"""
+    serializer_class = ConferenceMemberSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['status', 'role__role_type']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name']
+
+    def get_queryset(self):
+        conference = self.kwargs.get('conference_slug')
+        if conference:
+            return ConferenceMember.objects.select_related('user', 'role').filter(
+                conference__slug=conference
+            )
+        return ConferenceMember.objects.none()
+
+    def destroy(self, request, *args, **kwargs):
+        """Remove member"""
+        member = self.get_object()
+        conference = member.conference
+
+        if not self.has_conference_permission('remove_members', conference):
+            return Response({'detail': 'You do not have permission to remove members.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        if member.role.role_type == 'secretary':
+            return Response({'detail': 'Cannot remove conference secretary.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        return super().destroy(request, *args, **kwargs)
+
+
+class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
+    """ViewSet for managing conference invitations"""
+    serializer_class = ConferenceInvitationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['status']
+    search_fields = ['invited_user__username',
+                     'invited_user__first_name', 'invited_user__last_name']
+
+    def get_queryset(self):
+        conference_id = self.kwargs.get('conference_id')
+        if conference_id:
+            return ConferenceInvitation.objects.select_related(
+                'invited_user', 'invited_by', 'role', 'conference'
+            ).filter(conference_id=conference_id)
+        return ConferenceInvitation.objects.none()
+
+    def perform_create(self, serializer):
+        conference_id = self.kwargs.get('conference_id')
+        conference = get_object_or_404(Conference, pk=conference_id)
+
+        expires_at = timezone.now() + timezone.timedelta(days=7)
+
+        serializer.save(
+            conference=conference,
+            invited_by=self.request.user,
+            expires_at=expires_at
+        )
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None, conference_id=None):
+        """Accept an invitation"""
+        invitation = self.get_object()
+
+        if invitation.invited_user != request.user:
+            return Response({'detail': 'You can only accept your own invitations.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            member = invitation.accept()
+            return Response({
+                'detail': 'Invitation accepted successfully.',
+                'membership': ConferenceMemberSerializer(member).data
+            })
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None, conference_id=None):
+        """Reject an invitation"""
+        invitation = self.get_object()
+
+        if invitation.invited_user != request.user:
+            return Response({'detail': 'You can only reject your own invitations.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            invitation.reject()
+            return Response({'detail': 'Invitation rejected successfully.'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserInvitationViewSet(ModelViewSet):
+    """ViewSet for users to view their own invitations"""
+    serializer_class = ConferenceInvitationSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post']
+
+    def get_queryset(self):
+        return ConferenceInvitation.objects.select_related(
+            'conference', 'invited_by', 'role'
+        ).filter(invited_user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """Accept an invitation"""
+        invitation = self.get_object()
+
+        try:
+            member = invitation.accept()
+            return Response({
+                'detail': 'Invitation accepted successfully.',
+                'membership': ConferenceMemberSerializer(member).data
+            })
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject an invitation"""
+        invitation = self.get_object()
+
+        try:
+            invitation.reject()
+            return Response({'detail': 'Invitation rejected successfully.'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
