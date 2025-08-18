@@ -272,7 +272,7 @@ class ConferenceInvitationSerializer(ModelSerializer):
             'message', 'status', 'expires_at', 'responded_at', 'created_at', 'is_expired'
         ]
         read_only_fields = [
-            'conference', 'invited_user', 'invited_by', 'responded_at', 'created_at',
+            'invited_user', 'invited_by', 'responded_at', 'created_at',
             'invited_user_display', 'invited_by_display', 'role_name', 'conference_name', 'is_expired'
         ]
 
@@ -286,19 +286,37 @@ class ConferenceInvitationSerializer(ModelSerializer):
                 "User with this username does not exist.")
 
     def validate(self, data):
-        # Get the user object from the username
         username = data.get('invited_user_username')
-        if username:
-            # This is actually the user object from validate_invited_user_username
-            data['invited_user'] = username
+        invited_by = self.context.get('request').user
+        conference = data.get('conference')
+        status = data.get('status')
+
+        if invited_by == username:
+            raise serializers.ValidationError(
+                "The invited member can't same with inviter")
+
+        if ConferenceMember.objects.filter(user=username, conference=conference).exists():
+            raise serializers.ValidationError(
+                'User is already a member of this conference.')
+
+        if status == 'pending':
+            existing_pending = ConferenceInvitation.objects.filter(
+                conference=conference,
+                invited_user=username,
+                status='pending'
+            ).exclude(pk=self.instance)
+            if existing_pending.exists():
+                raise serializers.ValidationError(
+                    'User already has a pending invitation for this conference.')
 
         return data
 
     def create(self, validated_data):
         invited_user = validated_data.pop('invited_user_username', None)
+        invited_by = self.context['request'].user
         if invited_user:
             validated_data['invited_user'] = invited_user
-
+        validated_data['invited_by'] = invited_by
         return super().create(validated_data)
 
     def get_is_expired(self, obj):
