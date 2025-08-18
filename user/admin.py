@@ -1,26 +1,34 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
+from django.db.models import Count
 
 from .models import User
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'phone', 'full_name', 'user_type_badge', 'is_active', 'is_staff')
-    list_filter = ('is_active', 'is_staff', 'user_type', 'date_joined')
-    search_fields = ('email', 'phone', 'first_name', 'last_name')
+    list_display = ('username', 'email', 'phone', 'full_name', 'get_conference_memberships',
+                    'is_verified', 'is_active', 'is_staff', 'date_joined')
+    list_filter = ('is_active', 'is_staff', 'is_verified', 'date_joined')
+    search_fields = ('username', 'email', 'phone', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     filter_horizontal = ('groups', 'user_permissions',)
-    readonly_fields = ('date_joined',)
+    readonly_fields = ('date_joined', 'get_conference_memberships',
+                       'get_conference_roles', 'get_invitations_summary')
 
     fieldsets = (
-        (None, {'fields': ('email', 'phone', 'password')}),
-        (_('Personal info'), {'fields': ('first_name', 'last_name')}),
+        (None, {'fields': ('username', 'password')}),
+        (_('Personal info'), {
+         'fields': ('first_name', 'last_name', 'email', 'phone')}),
         (_('Permissions'), {
-            'fields': ('user_type', 'is_active', 'is_staff', 'is_superuser',
+            'fields': ('is_active', 'is_verified', 'is_staff', 'is_superuser',
                        'groups', 'user_permissions'),
+        }),
+        (_('Conference Information'), {
+            'fields': ('get_conference_memberships', 'get_conference_roles', 'get_invitations_summary'),
         }),
         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
     )
@@ -28,48 +36,111 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'phone', 'password1', 'password2', 'user_type'),
+            'fields': ('username', 'email', 'phone', 'password1', 'password2'),
         }),
     )
 
     def full_name(self, obj):
-        return obj.get_full_name()
+        return obj.get_full_name() or obj.username
 
     full_name.short_description = _('Full Name')
 
-    def user_type_badge(self, obj):
-        colors = {
-            User.UserType.SUPER_USER: 'red',
-            User.UserType.HAMAYESH_MANAGER: 'green',
-            User.UserType.HAMAYESH_YAR: 'blue'
-        }
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; '
-            'border-radius: 3px;">{}</span>',
-            colors[obj.user_type],
-            obj.get_user_type_display()
-        )
+    def get_conference_memberships(self, obj):
+        if not obj.pk:
+            return "No memberships yet"
 
-    user_type_badge.short_description = _('User Type')
+        memberships = obj.conference_memberships.select_related(
+            'conference', 'role').filter(status='active')
+        count = memberships.count()
+
+        if count == 0:
+            return "No active memberships"
+
+        url = reverse(
+            'admin:conference_conferencemember_changelist') + f'?user__id={obj.id}'
+        return mark_safe(f'<a href="{url}">{count} active memberships</a>')
+
+    get_conference_memberships.short_description = 'Conference Memberships'
+
+    def get_conference_roles(self, obj):
+        if not obj.pk:
+            return "No roles yet"
+
+        memberships = obj.conference_memberships.select_related(
+            'conference', 'role').filter(status='active')
+
+        if not memberships.exists():
+            return "No active roles"
+
+        role_info = []
+        for membership in memberships[:3]:
+            colors = {
+                'secretary': '#dc3545',
+                'deputy': '#fd7e14',
+                'assistant': '#28a745'
+            }
+            color = colors.get(membership.role.role_type, '#6c757d')
+            role_info.append(
+                f'<span style="background: {color}; color: white; padding: 1px 6px; border-radius: 2px; font-size: 10px;">'
+                f'{membership.role.get_role_type_display()}</span> in {membership.conference.name}'
+            )
+
+        if memberships.count() > 3:
+            role_info.append(f"... and {memberships.count() - 3} more")
+
+        return mark_safe('<br>'.join(role_info))
+
+    get_conference_roles.short_description = 'Conference Roles'
+
+    def get_invitations_summary(self, obj):
+        if not obj.pk:
+            return "No invitations yet"
+
+        received_pending = obj.conference_invitations.filter(
+            status='pending').count()
+        received_total = obj.conference_invitations.count()
+
+        sent_pending = obj.sent_invitations.filter(status='pending').count()
+        sent_total = obj.sent_invitations.count()
+
+        summary = []
+        if received_total > 0:
+            url = reverse(
+                'admin:conference_conferenceinvitation_changelist') + f'?invited_user__id={obj.id}'
+            summary.append(
+                f'<a href="{url}">Received: {received_total} ({received_pending} pending)</a>')
+
+        if sent_total > 0:
+            url = reverse(
+                'admin:conference_conferenceinvitation_changelist') + f'?invited_by__id={obj.id}'
+            summary.append(
+                f'<a href="{url}">Sent: {sent_total} ({sent_pending} pending)</a>')
+
+        if not summary:
+            return "No invitations"
+
+        return mark_safe('<br>'.join(summary))
+
+    get_invitations_summary.short_description = 'Invitations'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('conference_memberships__conference', 'conference_memberships__role')
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         is_superuser = request.user.is_superuser
 
         if not is_superuser:
-            form.base_fields['user_type'].disabled = True
-            form.base_fields['is_superuser'].disabled = True
-            form.base_fields['is_staff'].disabled = True
-            form.base_fields['user_permissions'].disabled = True
-            form.base_fields['groups'].disabled = True
+            if 'is_superuser' in form.base_fields:
+                form.base_fields['is_superuser'].disabled = True
+            if 'is_staff' in form.base_fields:
+                form.base_fields['is_staff'].disabled = True
+            if 'user_permissions' in form.base_fields:
+                form.base_fields['user_permissions'].disabled = True
+            if 'groups' in form.base_fields:
+                form.base_fields['groups'].disabled = True
 
         return form
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        if not request.user.is_superuser:
-            qs = qs.filter(user_type__in=[User.UserType.HAMAYESH_MANAGER, User.UserType.HAMAYESH_YAR])
-        return qs
 
     def has_delete_permission(self, request, obj=None):
         if not request.user.is_superuser:
