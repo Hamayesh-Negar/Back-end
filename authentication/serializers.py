@@ -35,21 +35,21 @@ class RegisterSerializer(ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.CharField()
+    username = serializers.CharField()
     password = serializers.CharField()
 
     def validate(self, data):
-        email = data.get('email')
+        username = data.get('username')
         password = data.get('password')
 
-        if not email or not password:
+        if not username or not password:
             raise serializers.ValidationError(
-                "Email and password are required.")
+                "Username and password are required.")
 
-        user = authenticate(username=email, password=password)
+        user = authenticate(username=username, password=password)
 
         if not user:
-            raise serializers.ValidationError("Invalid email or password.")
+            raise serializers.ValidationError("Invalid username or password.")
 
         if not user.is_active:
             raise serializers.ValidationError("User account is inactive.")
