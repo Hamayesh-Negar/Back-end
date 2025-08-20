@@ -1,3 +1,5 @@
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from django.contrib.auth import get_user_model
@@ -27,25 +29,23 @@ class ConferenceSerializer(ModelSerializer):
             return {
                 'status': 'upcoming',
                 'days_left': (obj.start_date - today).days,
-                'message': f'Starts in {(obj.start_date - today).days} days'
             }
         elif obj.start_date <= today <= obj.end_date:
             return {
                 'status': 'ongoing',
                 'days_left': (obj.end_date - today).days,
-                'message': f'Ends in {(obj.end_date - today).days} days'
             }
         else:
             return {
                 'status': 'ended',
                 'days_left': 0,
-                'message': 'Conference has ended'
             }
 
     def get_created_by(self, obj):
+        user = self.context['request'].user
         return {
-            'id': obj.created_by.id,
-            'username': obj.created_by.username
+            'id': user.id,
+            'username': user.username
         }
 
 
@@ -53,6 +53,7 @@ class ConferenceDetailSerializer(ModelSerializer):
     days_duration = serializers.SerializerMethodField()
     user_role = serializers.SerializerMethodField()
     user_permissions = serializers.SerializerMethodField()
+    membership_status = serializers.SerializerMethodField()
     user_status_message = serializers.SerializerMethodField()
 
     class Meta:
@@ -61,7 +62,7 @@ class ConferenceDetailSerializer(ModelSerializer):
             'id', 'name', 'slug', 'description', 'start_date', 'end_date', 'is_active',
             'created_by', 'days_duration', 'max_executives', 'max_members',
             'enable_categorization', 'max_tasks_per_conference', 'max_tasks_per_user',
-            'user_role', 'user_permissions', 'user_status_message'
+            'user_role', 'user_permissions', 'membership_status', 'user_status_message'
         ]
         read_only_fields = ['created_at', 'updated_at',
                             'created_by', 'user_role', 'user_permissions', 'user_status_message']
@@ -95,10 +96,17 @@ class ConferenceDetailSerializer(ModelSerializer):
 
         if request and request.user.is_authenticated:
             user_membership = instance.members.filter(
-                user=request.user, status='active').first()
-            if not user_membership and not request.user.is_superuser:
+                user=request.user).first()
+
+            conference_access, _ = request.user.check_conference_access(
+                instance)
+
+            if (not user_membership and not request.user.is_superuser) or not conference_access:
                 allowed_fields = ['id', 'name', 'slug', 'description',
                                   'start_date', 'end_date', 'days_duration']
+                if not conference_access:
+                    allowed_fields.extend(
+                        ['membership_status', 'user_status_message'])
                 representation = {
                     k: v for k, v in representation.items() if k in allowed_fields}
 
@@ -127,6 +135,15 @@ class ConferenceDetailSerializer(ModelSerializer):
             return list(membership.role.permissions.values_list('codename', flat=True))
 
         return []
+
+    def get_membership_status(self, obj):
+        """Get membership status for current user"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        membership = obj.members.filter(user=request.user).first()
+        return membership.status if membership else None
 
     def get_user_status_message(self, obj):
         """Get status message for current user's membership"""
@@ -272,7 +289,7 @@ class ConferenceInvitationSerializer(ModelSerializer):
             'message', 'status', 'expires_at', 'responded_at', 'created_at', 'is_expired'
         ]
         read_only_fields = [
-            'invited_user', 'invited_by', 'responded_at', 'created_at',
+            'conference', 'invited_user', 'invited_by', 'responded_at', 'created_at',
             'invited_user_display', 'invited_by_display', 'role_name', 'conference_name', 'is_expired'
         ]
 
@@ -284,6 +301,17 @@ class ConferenceInvitationSerializer(ModelSerializer):
         except User.DoesNotExist:
             raise serializers.ValidationError(
                 "User with this username does not exist.")
+
+    def validate_expires_at(self, value):
+        if value and value <= timezone.now():
+            raise serializers.ValidationError(
+                "Expiration date must be in the future.")
+        return value
+
+    def validate_empty_values(self, data):
+        if not data.get('expires_at'):
+            data['expires_at'] = timezone.now() + timedelta(days=7)
+        return super().validate_empty_values(data)
 
     def validate(self, data):
         username = data.get('invited_user_username')

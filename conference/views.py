@@ -46,7 +46,7 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
 
         user_conferences = Conference.objects.filter(
             models.Q(created_by=user) |
-            models.Q(members__user=user, members__status='active')
+            models.Q(members__user=user)
         ).distinct()
 
         return user_conferences
@@ -151,10 +151,12 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
 
         serializer = ConferenceInvitationSerializer(
             data=request.data, context={'request': request})
-        serializer.validated_data['conference'] = conference
-        serializer.validated_data['invited_by'] = request.user
 
         if serializer.is_valid():
+
+            serializer.validated_data['conference'] = conference
+            serializer.validated_data['invited_by'] = request.user
+
             invitation = serializer.save()
             return Response(ConferenceInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -264,16 +266,16 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
                      'invited_user__first_name', 'invited_user__last_name']
 
     def get_queryset(self):
-        conference_id = self.kwargs.get('conference_id')
-        if conference_id:
+        conference_slug = self.kwargs.get('conference_slug')
+        if conference_slug:
             return ConferenceInvitation.objects.select_related(
                 'invited_user', 'invited_by', 'role', 'conference'
-            ).filter(conference_id=conference_id)
+            ).filter(conference__slug=conference_slug)
         return ConferenceInvitation.objects.none()
 
     def perform_create(self, serializer):
-        conference_id = self.kwargs.get('conference_id')
-        conference = get_object_or_404(Conference, pk=conference_id)
+        conference_slug = self.kwargs.get('conference_slug')
+        conference = get_object_or_404(Conference, slug=conference_slug)
 
         expires_at = timezone.now() + timezone.timedelta(days=7)
 
