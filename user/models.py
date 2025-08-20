@@ -54,6 +54,41 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
 
-    @property
-    def is_hamayesh_yar(self):
-        return self.user_type == User.UserType.HAMAYESH_YAR
+    def get_conference_memberships(self):
+        return self.conference_memberships.select_related('conference', 'role').all()
+
+    def has_conference_permission(self, conference, permission_codename):
+        try:
+            membership = self.conference_memberships.get(
+                conference=conference, status='active')
+            return membership.has_permission(permission_codename)
+        except:
+            return False
+
+    def get_conference_membership_status(self, conference):
+        try:
+            membership = self.conference_memberships.get(conference=conference)
+            return membership.status, membership
+        except:
+            return None, None
+
+    def check_conference_access(self, conference):
+        status, membership = self.get_conference_membership_status(conference)
+
+        if not membership:
+            return False, "You are not a member of this conference."
+
+        if status == 'suspended':
+            return False, "Membership suspended."
+        elif status == 'inactive':
+            return False, "Membership inactive."
+
+        return True, membership
+
+    def get_conference_role(self, conference):
+        try:
+            membership = self.conference_memberships.get(
+                conference=conference, status='active')
+            return membership.role
+        except:
+            return None
