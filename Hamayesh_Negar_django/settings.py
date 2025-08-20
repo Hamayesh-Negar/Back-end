@@ -190,7 +190,7 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
+    'ALGORITHM': os.environ.get('JWT_ALGORITHM', 'HS256'),
     'SIGNING_KEY': os.environ.get('JWT_SECRET_KEY', SECRET_KEY),
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
@@ -233,5 +233,10 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = True
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CSRF_USE_X_CSRF_TOKEN = DEBUG
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(' ')
+
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ORIGINS = os.environ.get('CORS_ALLOW_ORIGINS', '').split(' ')
