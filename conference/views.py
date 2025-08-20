@@ -150,14 +150,11 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
                             status=status.HTTP_403_FORBIDDEN)
 
         serializer = ConferenceInvitationSerializer(
-            data=request.data, context={'request': request})
+            data=request.data, context={'request': request, 'conference': conference})
 
         if serializer.is_valid():
-
-            serializer.validated_data['conference'] = conference
-            serializer.validated_data['invited_by'] = request.user
-
-            invitation = serializer.save()
+            invitation = serializer.save(
+                conference=conference, invited_by=request.user)
             return Response(ConferenceInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -285,6 +282,14 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
             expires_at=expires_at
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        conference_slug = self.kwargs.get('conference_slug')
+        if conference_slug:
+            conference = get_object_or_404(Conference, slug=conference_slug)
+            context['conference'] = conference
+        return context
+
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None, conference_id=None):
         """Accept an invitation"""
@@ -335,6 +340,10 @@ class UserInvitationViewSet(ModelViewSet):
         """Accept an invitation"""
         invitation = self.get_object()
 
+        if invitation.invited_user != request.user:
+            return Response({'detail': 'You can only accept your own invitations.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
         try:
             member = invitation.accept()
             return Response({
@@ -348,6 +357,10 @@ class UserInvitationViewSet(ModelViewSet):
     def reject(self, request, pk=None):
         """Reject an invitation"""
         invitation = self.get_object()
+
+        if invitation.invited_user != request.user:
+            return Response({'detail': 'You can only reject your own invitations.'},
+                            status=status.HTTP_403_FORBIDDEN)
 
         try:
             invitation.reject()

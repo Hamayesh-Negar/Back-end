@@ -1,5 +1,7 @@
+import conference.views
 from datetime import timedelta
 from django.utils import timezone
+import django.utils.text
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from django.contrib.auth import get_user_model
@@ -66,6 +68,11 @@ class ConferenceDetailSerializer(ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at',
                             'created_by', 'user_role', 'user_permissions', 'user_status_message']
+
+    def validate_empty_values(self, data):
+        if not data.get('slug'):
+            data['slug'] = django.utils.text.slugify(data.get('name', ''))
+        return super().validate_empty_values(data)
 
     def validate(self, data):
         if data.get('slug'):
@@ -316,8 +323,12 @@ class ConferenceInvitationSerializer(ModelSerializer):
     def validate(self, data):
         username = data.get('invited_user_username')
         invited_by = self.context.get('request').user
-        conference = data.get('conference')
+        conference = self.context.get('conference') or data.get('conference')
         status = data.get('status')
+
+        if not conference:
+            raise serializers.ValidationError(
+                "Conference must be provided.")
 
         if invited_by == username:
             raise serializers.ValidationError(
@@ -332,7 +343,7 @@ class ConferenceInvitationSerializer(ModelSerializer):
                 conference=conference,
                 invited_user=username,
                 status='pending'
-            ).exclude(pk=self.instance)
+            ).exclude(pk=self.instance.pk if self.instance else None)
             if existing_pending.exists():
                 raise serializers.ValidationError(
                     'User already has a pending invitation for this conference.')
@@ -341,10 +352,8 @@ class ConferenceInvitationSerializer(ModelSerializer):
 
     def create(self, validated_data):
         invited_user = validated_data.pop('invited_user_username', None)
-        invited_by = self.context['request'].user
         if invited_user:
             validated_data['invited_user'] = invited_user
-        validated_data['invited_by'] = invited_by
         return super().create(validated_data)
 
     def get_is_expired(self, obj):
