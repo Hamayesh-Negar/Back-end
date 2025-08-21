@@ -240,7 +240,6 @@ class ConferenceInvitation(models.Model):
     class Meta:
         verbose_name = 'Conference Invitation'
         verbose_name_plural = 'Conference Invitations'
-        unique_together = ['conference', 'invited_user', 'status']
         ordering = ['-created_at']
 
     def __str__(self):
