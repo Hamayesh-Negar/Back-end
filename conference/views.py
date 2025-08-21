@@ -162,7 +162,63 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
         if not request.user.is_authenticated:
             return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+
+        if response.status_code == status.HTTP_201_CREATED:
+            conference_data = response.data
+            conference_id = conference_data.get('id')
+
+            try:
+                conference = Conference.objects.get(id=conference_id)
+
+                secretary_role = ConferenceRole.objects.filter(
+                    conference=conference,
+                    role_type='secretary'
+                ).first()
+
+                if secretary_role:
+                    ConferenceMember.objects.create(
+                        user=request.user,
+                        conference=conference,
+                        role=secretary_role
+                    )
+
+                    conference_data['message'] = f'Conference created successfully. You have been assigned as the Conference Secretary.'
+                else:
+                    conference_data['warning'] = 'Conference created but there was an issue creating your membership. Please contact support.'
+
+            except Exception as e:
+                conference_data[
+                    'warning'] = f'Conference created successfully, but there was an issue with membership creation: {str(e)}'
+
+        return response
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def my_membership(self, request, pk=None):
+        """Get current user's membership details for this conference"""
+        conference = self.get_object()
+
+        try:
+            membership = ConferenceMember.objects.get(
+                user=request.user,
+                conference=conference
+            )
+            return Response({
+                'membership': {
+                    'id': membership.id,
+                    'role': membership.role.name,
+                    'role_type': membership.role.role_type,
+                    'status': membership.status,
+                    'joined_at': membership.created_at,
+                    'permissions': list(membership.role.permissions.values_list('codename', flat=True))
+                },
+                'message': self.get_membership_status_message(membership)
+            })
+        except ConferenceMember.DoesNotExist:
+            return Response({
+                'membership': None,
+                'message': 'You are not a member of this conference.'
+            })
 
     def update(self, request, *args, **kwargs):
         conference = self.get_object()
