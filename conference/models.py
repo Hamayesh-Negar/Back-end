@@ -54,7 +54,6 @@ class Conference(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
-        """Validate conference constraints"""
         super().clean()
 
         if self.start_date and self.end_date and self.start_date > self.end_date:
@@ -75,7 +74,6 @@ class Conference(models.Model):
 
 
 class ConferencePermission(models.Model):
-    """Defines available permissions for conference roles"""
     codename = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -91,7 +89,6 @@ class ConferencePermission(models.Model):
 
 
 class ConferenceRole(models.Model):
-    """Defines roles within a conference with their permissions"""
     ROLE_TYPES = [
         ('secretary', 'Conference Secretary'),
         ('deputy', 'Conference Deputy'),
@@ -119,7 +116,6 @@ class ConferenceRole(models.Model):
         return f"{self.name} - {self.conference.name}"
 
     def clean(self):
-        """Validate role constraints"""
         super().clean()
 
         if self.role_type == 'secretary':
@@ -133,7 +129,6 @@ class ConferenceRole(models.Model):
 
 
 class ConferenceMember(models.Model):
-    """Links users to conferences with specific roles"""
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
@@ -161,7 +156,6 @@ class ConferenceMember(models.Model):
         return f"{self.user.username} - {self.role.name} in {self.conference.name}"
 
     def clean(self):
-        """Validate member constraints"""
         super().clean()
 
         if not self.pk:
@@ -188,17 +182,14 @@ class ConferenceMember(models.Model):
                     'Only one Secretary is allowed per conference.')
 
     def has_permission(self, permission_codename):
-        """Check if member has a specific permission"""
         if self.status != 'active':
             return False
         return self.role.permissions.filter(codename=permission_codename).exists()
 
     def get_permissions(self):
-        """Get all permissions for this member"""
         return self.role.permissions.all()
 
     def get_status_message(self):
-        """Get a user-friendly message about the member's status"""
         if self.status == 'active':
             return None
         elif self.status == 'suspended':
@@ -208,12 +199,10 @@ class ConferenceMember(models.Model):
         return f"Your membership status is '{self.status}'."
 
     def can_perform_actions(self):
-        """Check if member can perform actions based on their status"""
         return self.status == 'active'
 
 
 class ConferenceInvitation(models.Model):
-    """Manages invitations to join conferences as executive staff"""
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('accepted', 'Accepted'),
@@ -246,7 +235,6 @@ class ConferenceInvitation(models.Model):
         return f"Invitation to {self.invited_user.username} for {self.conference.name}"
 
     def clean(self):
-        """Validate invitation constraints"""
         super().clean()
 
         if ConferenceMember.objects.filter(user=self.invited_user, conference=self.conference).exists():
@@ -264,7 +252,6 @@ class ConferenceInvitation(models.Model):
                     'User already has a pending invitation for this conference.')
 
     def accept(self):
-        """Accept the invitation and create conference membership"""
         if self.status != 'pending':
             raise ValidationError('Only pending invitations can be accepted.')
 
@@ -286,7 +273,6 @@ class ConferenceInvitation(models.Model):
         return member
 
     def reject(self):
-        """Reject the invitation"""
         if self.status != 'pending':
             raise ValidationError('Only pending invitations can be rejected.')
 
@@ -305,7 +291,6 @@ def update_conference_status(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Conference)
 def create_default_roles_and_permissions(sender, instance, created, **kwargs):
-    """Create default roles and permissions when a conference is created"""
     if created:
         default_permissions = [
             ('view_conference', 'View conference details',
