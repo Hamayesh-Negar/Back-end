@@ -1,26 +1,33 @@
 FROM python:3.11-slim
 
-WORKDIR /app
-
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    gcc \
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
     postgresql-client \
-    libpq-dev \
-    netcat-traditional \
+    gcc \
     vim \
-    && apt-get clean \
+    curl \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-COPY ./docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN adduser --disabled-password --gecos '' appuser
+RUN chown -R appuser:appuser /app
+USER appuser
 
-ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 8000
+
+
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT [ "/app/entrypoint.sh" ]
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "hesabran.wsgi:application"]
