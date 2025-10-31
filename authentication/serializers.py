@@ -26,7 +26,7 @@ class RegisterSerializer(ModelSerializer):
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError("رمزعبور با تأیید رمزعبور مطابقت ندارد.")
         return data
 
     def create(self, validated_data):
@@ -45,15 +45,15 @@ class LoginSerializer(serializers.Serializer):
 
         if not username or not password:
             raise serializers.ValidationError(
-                "Username and password are required.")
+                "هر دو فیلد نام کاربری و رمزعبور الزامی هستند.")
 
         user = authenticate(username=username, password=password)
 
         if not user:
-            raise serializers.ValidationError("Invalid username or password.")
+            raise serializers.ValidationError("نام کاربری یا رمزعبور نامعتبر است.")
 
         if not user.is_active:
-            raise serializers.ValidationError("User account is inactive.")
+            raise serializers.ValidationError("حساب کاربری غیرفعال است.")
 
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
