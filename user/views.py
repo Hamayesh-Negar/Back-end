@@ -1,13 +1,12 @@
 from rest_framework import filters, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-
 from user.models import User
 from user.permissions import IsSuperuser
 from user.serializers import (
-    UserSerializer, UserCreateSerializer,
+    UserSerializer,
     UserChangePasswordSerializer, UserUpdateSerializer
 )
 
@@ -21,12 +20,8 @@ class UserViewSet(ModelViewSet):
     ordering = ['-date_joined']
 
     def get_permissions(self):
-        """
-        Instantiates and returns the list of permissions that this view requires.
-        """
-        if self.action == 'create':
-            permission_classes = [IsAuthenticated]
-        elif self.action in ['update', 'partial_update']:
+
+        if self.action in ['update', 'partial_update']:
             permission_classes = [IsAuthenticated]
         elif self.action == 'destroy':
             permission_classes = [IsAuthenticated, IsSuperuser]
@@ -59,9 +54,7 @@ class UserViewSet(ModelViewSet):
             return queryset.filter(id=user.id)
 
     def get_serializer_class(self):
-        if self.action == 'create':
-            return UserCreateSerializer
-        elif self.action in ['update', 'partial_update']:
+        if self.action in ['update', 'partial_update']:
             return UserUpdateSerializer
         elif self.action == 'change_password':
             return UserChangePasswordSerializer
@@ -95,7 +88,7 @@ class UserViewSet(ModelViewSet):
         user = self.get_object()
         if not (request.user.is_superuser or request.user.is_hamayesh_manager):
             return Response(
-                {'detail': 'You do not have permission to perform this action.'},
+                {'detail': 'شما اجازه انجام این عمل را ندارید.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         user.is_active = True
@@ -108,7 +101,7 @@ class UserViewSet(ModelViewSet):
         user = self.get_object()
         if not (request.user.is_superuser or request.user.is_hamayesh_manager):
             return Response(
-                {'detail': 'You do not have permission to perform this action.'},
+                {'detail': 'شما اجازه انجام این عمل را ندارید.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         user.is_active = False
@@ -130,7 +123,7 @@ class UserViewSet(ModelViewSet):
         user = self.get_object()
         if not (request.user.is_superuser or request.user.is_hamayesh_manager):
             return Response(
-                {'detail': 'You do not have permission to perform this action.'},
+                {'detail': 'شما اجازه انجام این عمل را ندارید.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         user.user_type = User.UserType.HAMAYESH_YAR
@@ -143,7 +136,7 @@ class UserViewSet(ModelViewSet):
         user = self.get_object()
         if not (request.user.is_superuser or request.user.is_hamayesh_manager):
             return Response(
-                {'detail': 'You do not have permission to perform this action.'},
+                {'detail': 'شما اجازه انجام این عمل را ندارید.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         user.user_type = User.UserType.NORMAL_USER
@@ -178,6 +171,6 @@ class UserViewSet(ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         if not request.user.is_superuser:
-            return Response({'detail': 'You do not have permission to perform this action.'},
+            return Response({'detail': 'شما اجازه انجام این عمل را ندارید.'},
                             status=403)
         return super().destroy(request, *args, **kwargs)

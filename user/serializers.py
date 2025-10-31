@@ -2,7 +2,6 @@ from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-
 from user.models import User
 
 
@@ -10,7 +9,7 @@ class UserSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                  'phone', 'is_active', 'date_joined']
+                  'phone', 'is_active']
 
 
 class UserBaseSerializer(ModelSerializer):
@@ -32,7 +31,7 @@ class UserBaseSerializer(ModelSerializer):
                     id=getattr(self.instance, 'id', None)
             ).exists():
                 raise serializers.ValidationError(
-                    "This username is already in use.")
+                    "این نام کاربری قبلاً استفاده شده است.")
             return normalized_username
         return value
 
@@ -46,7 +45,7 @@ class UserBaseSerializer(ModelSerializer):
                     id=getattr(self.instance, 'id', None)
             ).exists():
                 raise serializers.ValidationError(
-                    "This phone number is already in use.")
+                    "این شماره تلفن قبلاً استفاده شده است.")
 
             return normalized_phone
         return value
@@ -58,73 +57,12 @@ class UserBaseSerializer(ModelSerializer):
                     id=getattr(self.instance, 'id', None)
             ).exists():
                 raise serializers.ValidationError(
-                    "This email is already in use.")
+                    "این ایمیل قبلاً استفاده شده است.")
             return normalized_email
         return value
 
 
-class UserCreateSerializer(UserBaseSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={
-                                     'input_type': 'password'})
-    confirm_password = serializers.CharField(
-        write_only=True, required=True, style={'input_type': 'password'})
-    username = serializers.CharField(required=True)
-
-    class Meta(UserBaseSerializer.Meta):
-        fields = UserBaseSerializer.Meta.fields + \
-            ['password', 'confirm_password']
-
-    def validate(self, data):
-        if data.get('password') != data.get('confirm_password'):
-            raise serializers.ValidationError({
-                'confirm_password': "Passwords do not match."
-            })
-
-        try:
-            password_validation.validate_password(data.get('password'))
-        except ValidationError as e:
-            raise serializers.ValidationError({
-                'password': list(e.messages)
-            })
-
-        request = self.context.get('request')
-        if request and request.user:
-            creating_user = request.user
-            requested_type = data.get('user_type', User.UserType.NORMAL_USER)
-
-            if not creating_user.is_superuser:
-                if creating_user.is_hamayesh_manager:
-                    if requested_type not in [User.UserType.HAMAYESH_YAR, User.UserType.NORMAL_USER]:
-                        raise serializers.ValidationError({
-                            'user_type': "Hamayesh managers can only create Hamayesh Yar or Normal User accounts."
-                        })
-                else:
-                    raise serializers.ValidationError({
-                        'user_type': "You don't have permission to create users."
-                    })
-
-        return data
-
-    def create(self, validated_data):
-        validated_data.pop('confirm_password')
-        user_type = validated_data.get('user_type', User.UserType.NORMAL_USER)
-
-        if user_type == User.UserType.HAMAYESH_MANAGER:
-            user = User.objects.create_hamayesh_manager(**validated_data)
-        elif user_type == User.UserType.HAMAYESH_YAR:
-            user = User.objects.create_hamayesh_yar(**validated_data)
-        elif user_type == User.UserType.NORMAL_USER:
-            user = User.objects.create_normal_user(**validated_data)
-        else:
-            user = User.objects.create_user(**validated_data)
-
-        return user
-
-
 class UserUpdateSerializer(UserBaseSerializer):
-    """
-    Serializer for updating user information with permission-based field restrictions.
-    """
 
     class Meta(UserBaseSerializer.Meta):
         fields = [
@@ -140,15 +78,13 @@ class UserUpdateSerializer(UserBaseSerializer):
             target_user = self.instance
 
             if target_user != updating_user and not updating_user.is_superuser and not updating_user.is_hamayesh_manager:
-                raise serializers.ValidationError({
-                    'detail': "You can only update your own profile."
-                })
+                raise serializers.ValidationError(
+                    "شما اجازه ویرایش این پروفایل را ندارید.")
 
             if 'is_active' in data:
                 if not (updating_user.is_superuser or updating_user.is_hamayesh_manager):
-                    raise serializers.ValidationError({
-                        'is_active': "You don't have permission to change active status."
-                    })
+                    raise serializers.ValidationError(
+                        "شما اجازه تغییر این فیلد را ندارید.")
 
         return data
 
@@ -164,7 +100,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate_old_password(self, value):
         user = self.context.get('user') or self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError("Old password is incorrect.")
+            raise serializers.ValidationError("رمزعبور فعلی نادرست است.")
         return value
 
     @staticmethod
@@ -176,9 +112,8 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data.get('new_password') != data.get('confirm_new_password'):
-            raise serializers.ValidationError({
-                'confirm_new_password': "Passwords do not match."
-            })
+            raise serializers.ValidationError(
+                "رمزعبور با تأیید رمزعبور مطابقت ندارد.")
         return data
 
     def save(self, **kwargs):
