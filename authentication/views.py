@@ -62,3 +62,15 @@ class LogoutView(APIView):
 
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyTokenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def post(request):
+        
+        return Response({
+            'status': True,
+            'detail': "Token is valid.",
+        }, status=status.HTTP_200_OK)
