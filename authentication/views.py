@@ -57,7 +57,7 @@ class LogoutView(APIView):
         try:
             logout(request)
             return Response(
-                {'status': True, 'detail': "Successfully logged out."},
+                {'status': True, 'detail': "با موفقیت خارج شدید."},
                 status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -69,7 +69,7 @@ class VerifyTokenView(APIView):
 
     @staticmethod
     def post(request):
-        
+
         return Response({
             'status': True,
             'detail': "Token is valid.",
