@@ -1,4 +1,4 @@
-from django.contrib.auth import logout, login
+from django.contrib.auth import logout, login, get_user_model
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -8,6 +8,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from authentication.serializers import CustomTokenObtainPairSerializer, RegisterSerializer, LoginSerializer
 from user.serializers import UserSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+User = get_user_model()
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -73,4 +75,27 @@ class VerifyTokenView(APIView):
         return Response({
             'status': True,
             'detail': "Token is valid.",
+        }, status=status.HTTP_200_OK)
+
+
+class CheckUsernameView(APIView):
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def get(request):
+        username = request.query_params.get('username', '').strip()
+
+        if not username:
+            return Response({
+                'error': 'Username parameter is required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized_username = username.lower()
+
+        is_taken = User.objects.filter(
+            username__iexact=normalized_username).exists()
+
+        return Response({
+            'username': username,
+            'is_available': not is_taken,
         }, status=status.HTTP_200_OK)
