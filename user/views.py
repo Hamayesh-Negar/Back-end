@@ -3,11 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-from user.models import User
+from user.models import User, UserPreference
 from user.permissions import IsSuperuser
 from user.serializers import (
     UserSerializer,
-    UserChangePasswordSerializer, UserUpdateSerializer
+    UserChangePasswordSerializer, UserUpdateSerializer, UserPreferenceSerializer
 )
 
 
@@ -174,3 +174,44 @@ class UserViewSet(ModelViewSet):
             return Response({'detail': 'شما اجازه انجام این عمل را ندارید.'},
                             status=403)
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['get', 'post', 'patch'], permission_classes=[IsAuthenticated])
+    def preference(self, request):
+        user = request.user
+
+        preference, _ = UserPreference.objects.get_or_create(user=user)
+
+        if request.method == 'GET':
+            serializer = UserPreferenceSerializer(preference)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        serializer = UserPreferenceSerializer(
+            preference,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated])
+    def clear_preference(self, request):
+        user = request.user
+
+        try:
+            preference = UserPreference.objects.get(user=user)
+            preference.selected_conference = None
+            preference.save()
+            return Response({
+                'status': True,
+                'detail': 'رویداد انتخابی با موفقیت پاک شد.'
+            }, status=status.HTTP_200_OK)
+        except UserPreference.DoesNotExist:
+            return Response({
+                'status': True,
+                'detail': 'هیچ انتخابی برای پاک کردن وجود ندارد.'
+            }, status=status.HTTP_200_OK)

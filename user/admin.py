@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from django.urls import reverse
 from django.db.models import Count
 
-from .models import User
+from .models import User, UserPreference
 
 
 @admin.register(User)
@@ -151,3 +151,29 @@ class UserAdmin(BaseUserAdmin):
         css = {
             'all': ('css/custom_admin.css',)
         }
+
+
+@admin.register(UserPreference)
+class UserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ('user', 'selected_conference', 'updated_at')
+    list_filter = ('updated_at', 'created_at')
+    search_fields = ('user__username', 'user__email',
+                     'selected_conference__name')
+    readonly_fields = ('created_at', 'updated_at')
+    autocomplete_fields = ('user', 'selected_conference')
+
+    fieldsets = (
+        (_('User Information'), {
+            'fields': ('user',)
+        }),
+        (_('Preferences'), {
+            'fields': ('selected_conference',)
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'selected_conference')

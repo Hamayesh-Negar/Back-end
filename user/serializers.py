@@ -2,7 +2,7 @@ from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-from user.models import User
+from user.models import User, UserPreference
 
 
 class UserSerializer(ModelSerializer):
@@ -121,3 +121,38 @@ class UserChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
+
+
+class UserPreferenceSerializer(ModelSerializer):
+    selected_conference_name = serializers.CharField(
+        source='selected_conference.name',
+        read_only=True
+    )
+    selected_conference_slug = serializers.CharField(
+        source='selected_conference.slug',
+        read_only=True
+    )
+
+    class Meta:
+        model = UserPreference
+        fields = [
+            'id',
+            'user',
+            'selected_conference',
+            'selected_conference_name',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['user', 'created_at', 'updated_at']
+
+    def validate_selected_conference(self, value):
+        if value:
+            user = self.context.get(
+                'request').user if self.context.get('request') else None
+            if user:
+                has_access, message = user.check_conference_access(value)
+                if not has_access:
+                    raise serializers.ValidationError(
+                        f"شما به این رویداد دسترسی ندارید: {message}"
+                    )
+        return value

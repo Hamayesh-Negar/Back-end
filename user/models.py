@@ -92,3 +92,29 @@ class User(AbstractBaseUser, PermissionsMixin):
             return membership.role
         except:
             return None
+
+
+class UserPreference(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='preference',
+        help_text='User associated with this preference'
+    )
+    selected_conference = models.ForeignKey(
+        'conference.Conference',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='user_preferences',
+        help_text='User\'s currently selected conference'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User Preference'
+        verbose_name_plural = 'User Preferences'
+
+    def __str__(self):
+        return f"{self.user.username}'s preference"
