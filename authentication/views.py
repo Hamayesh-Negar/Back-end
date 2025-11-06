@@ -6,7 +6,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from authentication.serializers import CustomTokenObtainPairSerializer, RegisterSerializer, LoginSerializer
-from user.serializers import UserSerializer
+from user.serializers import UserSerializer, UserPreferenceSerializer
+from user.models import UserPreference
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 User = get_user_model()
@@ -25,10 +26,19 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
+            login(request, user)
+            try:
+                preference = UserPreference.objects.select_related(
+                    'selected_conference').get(user=user)
+                preference_data = UserPreferenceSerializer(preference).data
+            except UserPreference.DoesNotExist:
+                preference_data = None
+
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user': UserSerializer(user).data
+                'user': UserSerializer(user).data,
+                'preference': preference_data,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -43,10 +53,19 @@ class LoginView(APIView):
             user = serializer.validated_data
             refresh = RefreshToken.for_user(user)
             login(request, user)
+
+            try:
+                preference = UserPreference.objects.select_related(
+                    'selected_conference').get(user=user)
+                preference_data = UserPreferenceSerializer(preference).data
+            except UserPreference.DoesNotExist:
+                preference_data = None
+
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': UserSerializer(user).data,
+                'preference': preference_data,
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
