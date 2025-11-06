@@ -73,6 +73,23 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def my_conferences(self, request):
+        user = request.user
+
+        conferences = Conference.objects.filter(
+            members__user=user,
+            members__status='active'
+        ).select_related('created_by').prefetch_related('members').distinct()
+
+        serializer = self.get_serializer(conferences, many=True)
+
+        result = []
+        for conference_data in serializer.data:
+            result.append(conference_data)
+
+        return Response(result, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['get'])
     def categories(self, request, slug=None):
         conference = self.get_object()
