@@ -57,20 +57,17 @@ class Conference(models.Model):
         super().clean()
 
         if self.start_date and self.end_date and self.start_date > self.end_date:
-            raise ValidationError(
-                {'end_date': 'End date must be after start date.'})
+            raise ValidationError('تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.')
 
         if self.pk:
             current_members = self.members.count()
             if current_members > self.max_members:
-                raise ValidationError(
-                    {'max_members': f'Cannot reduce max members below current count ({current_members}).'})
+                raise ValidationError(f'نمی‌توان حداکثر اعضا را کمتر از تعداد اعضای فعلی ({current_members}) کاهش داد.')
 
             current_executives = self.members.filter(
                 role__role_type__in=['secretary', 'deputy', 'assistant']).count()
             if current_executives > self.max_executives:
-                raise ValidationError(
-                    {'max_executives': f'Cannot reduce max executives below current count ({current_executives}).'})
+                raise ValidationError(f'نمی‌توان حداکثر اعضای اجرایی را کمتر از تعداد فعلی ({current_executives}) کاهش داد.')
 
 
 class ConferencePermission(models.Model):
@@ -124,8 +121,7 @@ class ConferenceRole(models.Model):
                 role_type='secretary'
             ).exclude(pk=self.pk)
             if existing_secretary.exists():
-                raise ValidationError(
-                    {'role_type': 'Only one Secretary role is allowed per conference.'})
+                raise ValidationError('فقط یک نقش دبیر در هر کنفرانس مجاز است.')
 
 
 class ConferenceMember(models.Model):
@@ -161,8 +157,7 @@ class ConferenceMember(models.Model):
         if not self.pk:
             current_members = self.conference.members.count()
             if current_members >= self.conference.max_members:
-                raise ValidationError(
-                    'Conference has reached maximum member limit.')
+                raise ValidationError('رویداد به تعداد حداکثر اعضا رسیده است.')
 
         if self.role.role_type in ['secretary', 'deputy', 'assistant']:
             current_executives = self.conference.members.filter(
@@ -170,7 +165,7 @@ class ConferenceMember(models.Model):
             ).count()
             if not self.pk and current_executives >= self.conference.max_executives:
                 raise ValidationError(
-                    'Conference has reached maximum executive limit.')
+                    'رویداد به حداکثر تعداد اعضای اجرایی رسیده است.')
 
         if self.role.role_type == 'secretary':
             existing_secretary = ConferenceMember.objects.filter(
@@ -179,7 +174,7 @@ class ConferenceMember(models.Model):
             ).exclude(pk=self.pk)
             if existing_secretary.exists():
                 raise ValidationError(
-                    'Only one Secretary is allowed per conference.')
+                    'فقط یک نقش دبیر در هر کنفرانس مجاز است.')
 
     def has_permission(self, permission_codename):
         if self.status != 'active':
@@ -193,10 +188,10 @@ class ConferenceMember(models.Model):
         if self.status == 'active':
             return None
         elif self.status == 'suspended':
-            return f"Your membership in '{self.conference.name}' has been suspended."
+            return f"عضویت شما در '{self.conference.name}' معلق شده است."
         elif self.status == 'inactive':
-            return f"Your membership in '{self.conference.name}' is inactive."
-        return f"Your membership status is '{self.status}'."
+            return f"عضویت شما در '{self.conference.name}' غیرفعال است."
+        return f"وضعیت عضویت شما '{self.status}' است."
 
     def can_perform_actions(self):
         return self.status == 'active'
@@ -238,8 +233,7 @@ class ConferenceInvitation(models.Model):
         super().clean()
 
         if ConferenceMember.objects.filter(user=self.invited_user, conference=self.conference).exists():
-            raise ValidationError(
-                'User is already a member of this conference.')
+            raise ValidationError('کاربر در حال حاضر عضو این رویداد است.')
 
         if self.status == 'pending':
             existing_pending = ConferenceInvitation.objects.filter(
@@ -249,16 +243,16 @@ class ConferenceInvitation(models.Model):
             ).exclude(pk=self.pk)
             if existing_pending.exists():
                 raise ValidationError(
-                    'User already has a pending invitation for this conference.')
+                    'کاربر در حال حاضر دعوتنامه در انتظار برای این کنفرانس دارد.')
 
     def accept(self):
         if self.status != 'pending':
-            raise ValidationError('Only pending invitations can be accepted.')
+            raise ValidationError('فقط دعوتنامه‌های در انتظار می‌توانند پذیرفته شوند.')
 
         if timezone.now() > self.expires_at:
             self.status = 'expired'
             self.save()
-            raise ValidationError('Invitation has expired.')
+            raise ValidationError('دعوتنامه منقضی شده است.')
 
         member = ConferenceMember.objects.create(
             user=self.invited_user,
@@ -274,7 +268,7 @@ class ConferenceInvitation(models.Model):
 
     def reject(self):
         if self.status != 'pending':
-            raise ValidationError('Only pending invitations can be rejected.')
+            raise ValidationError('فقط دعوتنامه‌های در انتظار می‌توانند رد شوند.')
 
         self.status = 'rejected'
         self.responded_at = timezone.now()
@@ -331,7 +325,7 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
         secretary_role = ConferenceRole.objects.create(
             conference=instance,
             role_type='secretary',
-            name='Conference Secretary',
+            name='دبیر',
             description='Full administrative control over the conference'
         )
         secretary_role.permissions.set(permissions)
@@ -341,7 +335,7 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
         deputy_role = ConferenceRole.objects.create(
             conference=instance,
             role_type='deputy',
-            name='Conference Deputy',
+            name='معاون',
             description='Administrative control with limited critical actions'
         )
         deputy_role.permissions.set(deputy_permissions)
@@ -353,7 +347,7 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
         assistant_role = ConferenceRole.objects.create(
             conference=instance,
             role_type='assistant',
-            name='Conference Assistant',
+            name='دستیار',
             description='Handles routine administrative tasks'
         )
         assistant_role.permissions.set(assistant_permissions)
