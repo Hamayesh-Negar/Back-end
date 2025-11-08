@@ -86,6 +86,16 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
 
         result = []
         for conference_data in serializer.data:
+            conference = conferences.get(id=conference_data['id'])
+            try:
+                membership = conference.members.get(user=user, status='active')
+                conference_data['membership'] = {
+                    'role': membership.role.name,
+                    'role_type': membership.role.role_type,
+                    'status': membership.status,
+                }
+            except ConferenceMember.DoesNotExist:
+                pass
             result.append(conference_data)
 
         return Response(result, status=status.HTTP_200_OK)

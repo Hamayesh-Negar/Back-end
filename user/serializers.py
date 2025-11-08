@@ -128,10 +128,6 @@ class UserPreferenceSerializer(ModelSerializer):
         source='selected_conference.name',
         read_only=True
     )
-    selected_conference_slug = serializers.CharField(
-        source='selected_conference.slug',
-        read_only=True
-    )
 
     class Meta:
         model = UserPreference
