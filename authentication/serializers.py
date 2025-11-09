@@ -33,6 +33,9 @@ class RegisterSerializer(ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('confirm_password', None)
         password = validated_data.pop('password', None)
+        
+        if 'username' in validated_data:
+            validated_data['username'] = validated_data['username'].lower()
 
         user = User.objects.create(**validated_data)
         if password:
@@ -46,7 +49,7 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField()
 
     def validate(self, data):
-        username = data.get('username')
+        username = data.get('username').lower()
         password = data.get('password')
 
         if not username or not password:
