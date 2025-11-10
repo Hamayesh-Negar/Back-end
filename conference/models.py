@@ -57,17 +57,20 @@ class Conference(models.Model):
         super().clean()
 
         if self.start_date and self.end_date and self.start_date > self.end_date:
-            raise ValidationError('تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.')
+            raise ValidationError(
+                'تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.')
 
         if self.pk:
             current_members = self.members.count()
             if current_members > self.max_members:
-                raise ValidationError(f'نمی‌توان حداکثر اعضا را کمتر از تعداد اعضای فعلی ({current_members}) کاهش داد.')
+                raise ValidationError(
+                    f'نمی‌توان حداکثر اعضا را کمتر از تعداد اعضای فعلی ({current_members}) کاهش داد.')
 
             current_executives = self.members.filter(
                 role__role_type__in=['secretary', 'deputy', 'assistant']).count()
             if current_executives > self.max_executives:
-                raise ValidationError(f'نمی‌توان حداکثر اعضای اجرایی را کمتر از تعداد فعلی ({current_executives}) کاهش داد.')
+                raise ValidationError(
+                    f'نمی‌توان حداکثر اعضای اجرایی را کمتر از تعداد فعلی ({current_executives}) کاهش داد.')
 
 
 class ConferencePermission(models.Model):
@@ -121,7 +124,8 @@ class ConferenceRole(models.Model):
                 role_type='secretary'
             ).exclude(pk=self.pk)
             if existing_secretary.exists():
-                raise ValidationError('فقط یک نقش دبیر در هر کنفرانس مجاز است.')
+                raise ValidationError(
+                    'فقط یک نقش دبیر در هر کنفرانس مجاز است.')
 
 
 class ConferenceMember(models.Model):
@@ -247,7 +251,8 @@ class ConferenceInvitation(models.Model):
 
     def accept(self):
         if self.status != 'pending':
-            raise ValidationError('فقط دعوتنامه‌های در انتظار می‌توانند پذیرفته شوند.')
+            raise ValidationError(
+                'فقط دعوتنامه‌های در انتظار می‌توانند پذیرفته شوند.')
 
         if timezone.now() > self.expires_at:
             self.status = 'expired'
@@ -268,7 +273,8 @@ class ConferenceInvitation(models.Model):
 
     def reject(self):
         if self.status != 'pending':
-            raise ValidationError('فقط دعوتنامه‌های در انتظار می‌توانند رد شوند.')
+            raise ValidationError(
+                'فقط دعوتنامه‌های در انتظار می‌توانند رد شوند.')
 
         self.status = 'rejected'
         self.responded_at = timezone.now()
@@ -287,12 +293,12 @@ def update_conference_status(sender, instance, **kwargs):
 def create_default_roles_and_permissions(sender, instance, created, **kwargs):
     if created:
         default_permissions = [
-            ('view_conference', 'View conference details',
-             'Can view basic conference information'),
             ('edit_conference', 'Edit conference settings',
              'Can modify conference settings and details'),
             ('delete_conference', 'Delete conference',
              'Can delete the entire conference'),
+            ('view_members', 'View conference members',
+             'Can see the list of conference members'),
             ('invite_members', 'Invite conference members',
              'Can send invitations to new members'),
             ('remove_members', 'Remove conference members',
@@ -301,10 +307,14 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
              'Can add new people/attendees to the conference'),
             ('edit_people', 'Edit people information',
              'Can modify people/attendees information'),
+            ('view_people', 'View people information',
+             'Can view people/attendees information'),
             ('approve_people', 'Approve people registration',
              'Can approve people registration requests'),
             ('create_tasks', 'Create tasks',
              'Can create new tasks within the conference'),
+            ('view_tasks', 'View tasks',
+             'Can view existing tasks within the conference'),
             ('assign_tasks', 'Assign tasks',
              'Can assign tasks to conference members'),
             ('edit_tasks', 'Edit tasks', 'Can modify existing tasks'),
@@ -312,6 +322,14 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
              'Can access conference reports and analytics'),
             ('manage_categories', 'Manage conference categories',
              'Can create and manage conference categories'),
+            ('view_categories', 'View conference categories',
+             'Can view conference categories'),
+            ('view_registration_forms', 'View registration forms',
+             'Can view registration forms'),
+            ('qr_code_management', 'Manage QR codes',
+             'Can generate and manage QR codes for the conference'),
+            ('qr_code_scanning', 'Scan QR codes',
+             'Can scan QR codes for attendance and access control'),
         ]
 
         permissions = []
