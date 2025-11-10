@@ -100,7 +100,47 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
 
         return Response(result, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def user_viewing_permissions(self, request, slug=None):
+
+        conference = self.get_object()
+        user = request.user
+
+        if user.is_superuser:
+            permissions = ConferencePermission.objects.all().values_list('codename', flat=True)
+            return Response({
+                'is_superuser': True,
+                'permissions': list(permissions),
+                'is_member': True,
+                'status': 'superuser'
+            }, status=status.HTTP_200_OK)
+
+        try:
+            membership = ConferenceMember.objects.select_related('role').get(
+                user=user,
+                conference=conference
+            )
+        except ConferenceMember.DoesNotExist:
+            return Response({
+                'error': 'کاربر عضو رویداد نمیباشد.'
+            }, status=status.HTTP_200_OK)
+
+        permissions = membership.role.permissions.values_list(
+            'codename', flat=True)
+
+        return Response({
+            'permissions': list(permissions),
+            'status': membership.status,
+            'can_view_tasks': 'view_tasks' in permissions,
+            'can_view_categories': 'view_categories' in permissions,
+            'can_view_people': 'view_people' in permissions,
+            'can_view_members': 'view_members' in permissions,
+            'can_view_reports': 'view_reports' in permissions,
+            'can_view_registration_forms': 'view_registration_forms' in permissions,
+            'can_manage_qr_codes': 'qr_code_management' in permissions,
+            'can_scan_qr_codes': 'qr_code_scanning' in permissions
+        }, status=status.HTTP_200_OK)
+
     def categories(self, request, slug=None):
         conference = self.get_object()
 
