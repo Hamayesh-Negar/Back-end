@@ -56,7 +56,8 @@ JAZZMIN_SETTINGS = {
     "search_model": ["user.User", "person.Person"],
     "user_avatar": None,
     "topmenu_links": [
-        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Home", "url": "admin:index",
+            "permissions": ["auth.view_user"]},
         {"model": "user.User"},
         {"model": "conference.Conference"},
     ],
@@ -210,14 +211,18 @@ USE_I18N = True
 
 USE_TZ = False
 
-STATIC_URL = os.environ.get("STATIC_URL", "/static/")
-STATIC_ROOT = os.environ.get("STATIC_ROOT", os.path.join(BASE_DIR, "staticfiles"))
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
-MEDIA_URL = os.environ.get("MEDIA_URL", "/media/")
-MEDIA_ROOT = os.environ.get("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 os.makedirs(STATIC_ROOT, exist_ok=True)
-os.makedirs(BASE_DIR / "static", exist_ok=True)
+os.makedirs(BASE_DIR / 'static', exist_ok=True)
 os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
