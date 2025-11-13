@@ -77,6 +77,9 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
     def my_conferences(self, request):
         user = request.user
 
+        include_conference_permissions = request.query_params.get(
+            'conference_permissions', 'false').lower() == 'true'
+
         conferences = Conference.objects.filter(
             members__user=user,
             members__status='active'
@@ -89,11 +92,23 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
             conference = conferences.get(id=conference_data['id'])
             try:
                 membership = conference.members.get(user=user, status='active')
+
                 conference_data['membership'] = {
                     'role': membership.role.name,
                     'role_type': membership.role.role_type,
                     'status': membership.status,
                 }
+
+                if include_conference_permissions:
+                    permissions = list(
+                        membership.role.permissions.values_list('codename', flat=True))
+                    
+                    conference_data['conference_permissions'] = {
+                        'can_edit_conference': 'edit_conference' in permissions,
+                        'can_delete_conference': 'delete_conference' in permissions,
+                        'can_deactivate_conference': 'deactivate_conference' in permissions,
+                    }
+
             except ConferenceMember.DoesNotExist:
                 pass
             result.append(conference_data)

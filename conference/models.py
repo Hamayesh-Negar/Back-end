@@ -297,6 +297,8 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
              'Can modify conference settings and details'),
             ('delete_conference', 'Delete conference',
              'Can delete the entire conference'),
+            ('deactivate_conference', 'Deactivate conference',
+             'Can deactivate the conference temporarily'),
             ('view_members', 'View conference members',
              'Can see the list of conference members'),
             ('invite_members', 'Invite conference members',
