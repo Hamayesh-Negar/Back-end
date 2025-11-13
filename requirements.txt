@@ -2,6 +2,7 @@ asgiref==3.8.1
 diff-match-patch==20241021
 Django==5.1.7
 gunicorn
+setuptools
 django-cors-headers
 django-admin-interface==0.29.4
 django-colorfield==0.12.0
