@@ -1,6 +1,7 @@
 from datetime import timedelta
 import os
 from pathlib import Path
+import dj_database_url
 from dotenv import load_dotenv
 
 
@@ -148,16 +149,25 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "Hamayesh_Negar_django.wsgi.application"
 
+# DATABASES = {
+#     "default": {
+#         "ENGINE": os.environ.get("DATABASE_ENGINE"),
+#         "NAME": os.environ.get("DATABASE_NAME"),
+#         "USER": os.environ.get("DATABASE_USER"),
+#         "PASSWORD": os.environ.get("DATABASE_PASSWORD"),
+#         "HOST": os.environ.get("DATABASE_HOST"),
+#         "PORT": os.environ.get("DATABASE_PORT"),
+#     }
+# }
+
 DATABASES = {
-    "default": {
-        "ENGINE": os.environ.get("DATABASE_ENGINE"),
-        "NAME": os.environ.get("DATABASE_NAME"),
-        "USER": os.environ.get("DATABASE_USER"),
-        "PASSWORD": os.environ.get("DATABASE_PASSWORD"),
-        "HOST": os.environ.get("DATABASE_HOST"),
-        "PORT": os.environ.get("DATABASE_PORT"),
-    }
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL"),
+        conn_max_age=600,
+        ssl_require=True
+    )
 }
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
