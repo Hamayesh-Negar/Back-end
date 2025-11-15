@@ -41,15 +41,6 @@ class UserViewSet(ModelViewSet):
 
         if user.is_superuser:
             return queryset
-        elif user.user_type == User.UserType.HAMAYESH_MANAGER:
-            return queryset.filter(
-                user_type__in=[User.UserType.HAMAYESH_YAR,
-                               User.UserType.NORMAL_USER]
-            )
-        elif user.user_type == User.UserType.HAMAYESH_YAR:
-            return queryset.filter(
-                user_type=User.UserType.NORMAL_USER
-            ).union(queryset.filter(id=user.id))
         else:
             return queryset.filter(id=user.id)
 
@@ -70,7 +61,7 @@ class UserViewSet(ModelViewSet):
         user = self.get_object()
         if user != request.user and not request.user.is_superuser:
             return Response(
-                {'detail': 'You can only change your own password.'},
+                {'detail': 'شما فقط می‌توانید رمزعبور خود را تغییر دهید.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -79,7 +70,7 @@ class UserViewSet(ModelViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response(
-                {'status': 'Password changed successfully'}
+                {'status': 'رمزعبور با موفقیت تغییر کرد.'}
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

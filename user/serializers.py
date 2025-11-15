@@ -6,10 +6,13 @@ from user.models import User, UserPreference
 
 
 class UserSerializer(ModelSerializer):
+    is_staff = serializers.BooleanField(source='is_staff', read_only=True)
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                  'phone', 'is_active']
+                  'phone', 'is_active', 'is_staff']
+        read_only_fields = ['id', 'is_active', 'is_staff']
 
 
 class UserBaseSerializer(ModelSerializer):
@@ -22,7 +25,8 @@ class UserBaseSerializer(ModelSerializer):
             'full_name', 'user_type',
             'is_active', 'date_joined'
         ]
-        read_only_fields = ['date_joined']
+        read_only_fields = ['id', 'full_name', 'is_active',
+                            'user_type', 'is_staff', 'date_joined']
 
     def validate_username(self, value):
         if value:
