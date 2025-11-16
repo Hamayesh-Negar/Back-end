@@ -6,7 +6,7 @@ from user.models import User, UserPreference
 
 
 class UserSerializer(ModelSerializer):
-    is_staff = serializers.BooleanField(source='is_staff', read_only=True)
+    is_staff = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -14,19 +14,41 @@ class UserSerializer(ModelSerializer):
                   'phone', 'is_active', 'is_staff']
         read_only_fields = ['id', 'is_active', 'is_staff']
 
+    def get_is_staff(self, obj):
+        if obj.is_staff:
+            return True
+        return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not instance.is_staff:
+            data.pop('is_staff', None)
+        return data
+
 
 class UserBaseSerializer(ModelSerializer):
     full_name = serializers.CharField(source='get_full_name', read_only=True)
+    is_staff = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'phone', 'first_name', 'last_name',
-            'full_name', 'user_type',
-            'is_active', 'date_joined'
+            'full_name', 'user_type', 'is_active', 'is_staff', 'date_joined'
         ]
         read_only_fields = ['id', 'full_name', 'is_active',
                             'user_type', 'is_staff', 'date_joined']
+
+    def get_is_staff(self, obj):
+        if obj.is_staff:
+            return True
+        return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not instance.is_staff:
+            data.pop('is_staff', None)
+        return data
 
     def validate_username(self, value):
         if value:
@@ -73,7 +95,7 @@ class UserUpdateSerializer(UserBaseSerializer):
             'id', 'username', 'email', 'phone', 'first_name', 'last_name',
             'full_name', 'is_active', 'date_joined'
         ]
-        read_only_fields = ['date_joined', 'full_name']
+        read_only_fields = ['id', 'date_joined', 'full_name', 'is_active']
 
     def validate(self, data):
         request = self.context.get('request')
