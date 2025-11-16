@@ -18,14 +18,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-db_url = os.environ.get('DATABASE_URL')
-if not db_url:
-    raise ValueError('DATABASE_URL environment variable is not set')
-db_name = db_url.split('/')[-1]
-user = db_url.split(':')[1].split('//')[1]
-host = db_url.split('@')[1].split(':')[0]
-port = db_url.split('@')[1].split(':')[1].split('/')[0]
-password = db_url.split(':')[2].split('@')[0]
+db_name = os.environ.get('DATABASE_NAME')
+user = os.environ.get('DATABASE_USER')
+host = os.environ.get('DATABASE_HOST')
+port = os.environ.get('DATABASE_PORT')
+password = os.environ.get('DATABASE_PASSWORD')
 
 max_retries = 5
 for attempt in range(max_retries):
@@ -138,4 +135,11 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 echo "Starting web server..."
+gunicorn hesabran.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 3 \
+    --log-level info \
+    --access-logfile - \
+    --error-logfile -
+
 exec "$@" 
