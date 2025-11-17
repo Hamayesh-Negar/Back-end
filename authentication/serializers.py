@@ -86,3 +86,17 @@ class ForgetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "خطایی رخ داد.")
         return normalized_email
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(
+        required=True, min_length=8, style={'input_type': 'password'})
+    confirm_new_password = serializers.CharField(
+        required=True, style={'input_type': 'password'})
+
+    def validate(self, data):
+        if data.get('new_password') != data.get('confirm_new_password'):
+            raise serializers.ValidationError(
+                "رمزعبور با تأیید رمزعبور مطابقت ندارد.")
+        return data

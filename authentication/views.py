@@ -182,3 +182,47 @@ class ForgetPasswordView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def post(request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            uid = request.data.get('uid')
+            token = serializer.validated_data['token']
+            new_password = serializer.validated_data['new_password']
+
+            try:
+                user_id = force_str(urlsafe_base64_decode(uid))
+                user = User.objects.get(pk=user_id)
+
+                token_generator = PasswordResetTokenGenerator()
+                if not token_generator.check_token(user, token):
+                    return Response({
+                        'status': False,
+                        'detail': 'لینک بازیابی رمزعبور نامعتبر یا منقضی شده است.',
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                user.set_password(new_password)
+                user.save()
+
+                return Response({
+                    'status': True,
+                    'detail': 'رمزعبور با موفقیت تغییر یافت.',
+                }, status=status.HTTP_200_OK)
+
+            except User.DoesNotExist:
+                return Response({
+                    'status': False,
+                    'detail': 'کاربر یافت نشد.',
+                }, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                logger.error(f"Error resetting password: {str(e)}")
+                return Response({
+                    'status': False,
+                    'detail': 'خطا در بازیابی رمزعبور. لطفاً دوباره تلاش کنید.',
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
