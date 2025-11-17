@@ -170,7 +170,7 @@ class ForgetPasswordView(APIView):
 
                 return Response({
                     'status': True,
-                    'detail': 'ایمیل بازیابی رمزعبور برای شما ارسال شده است.'
+                    'detail': 'ایمیل با موفقیت ارسال شد.'
                 }, status=status.HTTP_200_OK)
 
             except Exception as e:
