@@ -33,7 +33,7 @@ class RegisterSerializer(ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('confirm_password', None)
         password = validated_data.pop('password', None)
-        
+
         if 'username' in validated_data:
             validated_data['username'] = validated_data['username'].lower()
 
@@ -75,3 +75,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, data):
         data = super().validate(data)
         return data
+
+
+class ForgetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        normalized_email = value.lower().strip()
+        if not User.objects.filter(email=normalized_email).exists():
+            raise serializers.ValidationError(
+                "خطایی رخ داد.")
+        return normalized_email

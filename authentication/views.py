@@ -4,13 +4,24 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+import logging
 
-from authentication.serializers import CustomTokenObtainPairSerializer, RegisterSerializer, LoginSerializer
+from authentication.serializers import (
+    CustomTokenObtainPairSerializer, RegisterSerializer, LoginSerializer,
+    ForgetPasswordSerializer, ResetPasswordSerializer
+)
 from user.serializers import UserSerializer, UserPreferenceSerializer
 from user.models import UserPreference
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -118,3 +129,56 @@ class CheckUsernameView(APIView):
             'username': username,
             'is_available': not is_taken,
         }, status=status.HTTP_200_OK)
+
+
+class ForgetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def post(request):
+        serializer = ForgetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            try:
+                user = User.objects.get(email=email)
+
+                token_generator = PasswordResetTokenGenerator()
+                token = token_generator.make_token(user)
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+                reset_url = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
+
+                context = {
+                    'user': user,
+                    'reset_url': reset_url,
+                    'reset_token': token,
+                    'uid': uid,
+                }
+
+                html_message = render_to_string(
+                    'forget_password_email.html', context)
+
+                email_msg = EmailMessage(
+                    subject='بازیابی رمزعبور - Hamayesh Negar',
+                    body=html_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[email],
+                )
+                email_msg.content_subtype = 'html'
+
+                email_msg.send(fail_silently=False)
+
+                return Response({
+                    'status': True,
+                    'detail': 'ایمیل بازیابی رمزعبور برای شما ارسال شده است.'
+                }, status=status.HTTP_200_OK)
+
+            except Exception as e:
+                logger.error(f"Error sending reset email: {str(e)}")
+                return Response({
+                    'status': False,
+                    'detail': 'خطا در ارسال ایمیل. لطفاً دوباره تلاش کنید.',
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
