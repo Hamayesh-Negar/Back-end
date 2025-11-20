@@ -119,8 +119,8 @@ JAZZMIN_UI_TWEAKS = {
 AUTH_USER_MODEL = "user.User"
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -238,13 +238,26 @@ if not DEBUG:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-CSRF_USE_X_CSRF_TOKEN = DEBUG
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(" ")
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "CSRF_TRUSTED_ORIGINS", "").split(" ") if origin.strip()]
+CSRF_USE_SESSIONS = False
 
-CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ORIGINS = os.environ.get("CORS_ALLOW_ORIGINS", "").split(" ")
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "CORS_ALLOW_ORIGINS", "").split(" ") if origin.strip()] if not DEBUG else []
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 CORS_ALLOWED_HEADERS = [
     "accept",
