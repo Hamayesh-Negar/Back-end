@@ -23,3 +23,5 @@ python-dotenv~=1.0.1
 psycopg2-binary
 dj-database-url
 whitenoise[brotli]
+gunicorn
+uvicorn
