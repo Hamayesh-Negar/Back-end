@@ -151,8 +151,6 @@ class ForgetPasswordView(APIView):
                 context = {
                     'user': user,
                     'reset_url': reset_url,
-                    'reset_token': token,
-                    'uid': uid,
                 }
 
                 html_message = render_to_string(
