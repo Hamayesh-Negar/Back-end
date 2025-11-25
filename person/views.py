@@ -11,12 +11,11 @@ from rest_framework.viewsets import ModelViewSet
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
-from user.permissions import IsHamayeshManager, IsHamayeshYar
 
 
 class PersonViewSet(ModelViewSet):
     serializer_class = PersonSerializer
-    permission_classes = [IsAuthenticated, IsHamayeshYar]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
@@ -33,7 +32,7 @@ class PersonViewSet(ModelViewSet):
             return Person.objects.filter(categories__id=category_pk)
         return Person.objects.all()
 
-    @action(detail=True, methods=['post'], permission_classes=[IsHamayeshManager])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_active(self, request, pk=None):
         person = self.get_object()
         person.is_active = not person.is_active
@@ -131,7 +130,7 @@ class PersonViewSet(ModelViewSet):
 
 class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated, IsHamayeshYar]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filtetset_fields = ['is_active']
@@ -184,7 +183,7 @@ class CategoryViewSet(ModelViewSet):
 
 class TaskViewSet(ModelViewSet):
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated, IsHamayeshYar]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
@@ -262,7 +261,7 @@ class TaskViewSet(ModelViewSet):
 
 class PersonTaskViewSet(ModelViewSet):
     serializer_class = PersonTaskSerializer
-    permission_classes = [IsAuthenticated, IsHamayeshYar]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'person', 'task']
     ordering_fields = ['created_at', 'completed_at']
