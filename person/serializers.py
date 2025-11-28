@@ -112,16 +112,15 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate(self, data):
         conference = data['conference']
         name = data['name']
-        if Task.objects.filter(conference=conference, name=name).exists():
-            raise serializers.ValidationError({"name": "Task with this name already exists in the conference"})
+        if Task.objects.filter(conference=conference, name=name).exclude(
+                id=getattr(self.instance, 'id', None)).exists():
+            raise serializers.ValidationError('وظیفه‌ای با این نام در این رویداد وجود دارد.')
 
         started_time = data['started_time']
         finished_time = data['finished_time']
         if started_time is not None and finished_time is not None:
             if started_time > finished_time:
-                raise serializers.ValidationError({
-                    "started_time": "Started time cannot be greater than finished time"
-                })
+                raise serializers.ValidationError('زمان شروع نمی‌تواند بعد از زمان پایان باشد.')
 
         return data
 
