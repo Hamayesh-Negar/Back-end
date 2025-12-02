@@ -24,13 +24,10 @@ class PersonViewSet(ModelViewSet):
     pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
-        conference_slug = self.kwargs.get('conference_slug')
-        category_pk = self.kwargs.get('category_pk')
-        if conference_slug:
-            return Person.objects.filter(conference__slug=conference_slug)
-        if category_pk:
-            return Person.objects.filter(categories__id=category_pk)
-        return Person.objects.all()
+        user = self.request.user
+        if hasattr(user, 'preference') and user.preference.selected_conference:
+            return Person.objects.filter(conference=user.preference.selected_conference.id)
+
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_active(self, request, pk=None):
@@ -139,10 +136,9 @@ class CategoryViewSet(ModelViewSet):
     pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
-        conference = self.kwargs.get('conference_pk')
-        if conference:
-            return Category.objects.filter(conference_id=conference)
-        return Category.objects.all()
+        user = self.request.user
+        if hasattr(user, 'preference') and user.preference.selected_conference:
+            return Category.objects.filter(conference=user.preference.selected_conference.id)
 
     @action(detail=True, methods=['post'])
     def bulk_add_members(self, request, pk=None):
@@ -190,14 +186,9 @@ class TaskViewSet(ModelViewSet):
     ordering_fields = ['name', 'due_date', 'created_at']
 
     def get_queryset(self):
-        person_id = self.kwargs.get('person_pk')
-        conference_id = self.kwargs.get('conference_pk')
-        if person_id:
-            return Task.objects.filter(assignments__person_id=person_id)
-        elif conference_id:
-            return Task.objects.filter(conference_id=conference_id)
-        else:
-            return Task.objects.all()
+        user = self.request.user
+        if hasattr(user, 'preference') and user.preference.selected_conference:
+            return Task.objects.filter(conference=user.preference.selected_conference.id)
 
     @action(detail=True, methods=['post', 'delete'])
     def bulk_assign(self, request, pk=None):
