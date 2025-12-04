@@ -10,15 +10,14 @@ from rest_framework.viewsets import ModelViewSet
 
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
-from person.serializers import PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
+from person.serializers import PersonListSerializer, PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
 
 
 class PersonViewSet(ModelViewSet):
-    serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
-    filtetset_fields = ['is_active']
+    filterset_fields = ['is_active']
     search_fields = ['first_name', 'last_name', 'telephone', 'email']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
@@ -28,6 +27,10 @@ class PersonViewSet(ModelViewSet):
         if hasattr(user, 'preference') and user.preference.selected_conference:
             return Person.objects.filter(conference=user.preference.selected_conference.id)
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return PersonListSerializer
+        return PersonSerializer
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_active(self, request, pk=None):
@@ -130,7 +133,7 @@ class CategoryViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
-    filtetset_fields = ['is_active']
+    filterset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
     pagination_class = LargeResultsSetPagination

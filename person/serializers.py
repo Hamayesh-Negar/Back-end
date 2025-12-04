@@ -24,13 +24,16 @@ class CategorySerializer(serializers.ModelSerializer):
 
         if Category.objects.filter(conference=conference, name=data['name']).exclude(
                 id=getattr(self.instance, 'id', None)).exists():
-            raise serializers.ValidationError({"name": "Category with this name already exists in the conference"})
+            raise serializers.ValidationError(
+                {"name": "Category with this name already exists in the conference"})
         return data
 
 
 class PersonSerializer(serializers.ModelSerializer):
-    categories = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), many=True)
-    registered_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+    categories = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), many=True)
+    registered_by = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), required=False)
     full_name = serializers.CharField(source='get_full_name', read_only=True)
     task_count = serializers.SerializerMethodField()
     completed_task_count = serializers.SerializerMethodField()
@@ -41,6 +44,12 @@ class PersonSerializer(serializers.ModelSerializer):
                   'last_name', 'full_name', 'unique_code', 'hashed_unique_code', 'email', 'telephone',
                   'is_active', 'task_count', 'completed_task_count', 'registered_by']
         read_only_fields = ['registered_by', 'hashed_unique_code']
+
+    def get_task_count(self, obj):
+        return obj.tasks.count()
+
+    def get_completed_task_count(self, obj):
+        return obj.tasks.filter(status=PersonTask.COMPLETED).count()
 
     def create(self, validated_data):
         categories = validated_data.pop('categories', [])
@@ -60,7 +69,8 @@ class PersonSerializer(serializers.ModelSerializer):
             if Person.objects.filter(
                     unique_code=value
             ).exclude(id=self.instance.id if self.instance else None).exists():
-                raise serializers.ValidationError("This unique code is already in use.")
+                raise serializers.ValidationError(
+                    "This unique code is already in use.")
         return value
 
     def validate(self, data):
@@ -74,6 +84,23 @@ class PersonSerializer(serializers.ModelSerializer):
                     'categories': 'All categories must belong to the same conference'
                 })
         return data
+
+
+class PersonListSerializer(serializers.ModelSerializer):
+    categories = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), many=True)
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    task_count = serializers.SerializerMethodField()
+    completed_task_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Person
+        fields = [
+            'id', 'categories', 'full_name', 'unique_code', 'is_active',
+            'task_count', 'completed_task_count'
+        ]
+        read_only_fields = ['categories',
+                            'full_name', 'unique_code', 'is_active']
 
     @staticmethod
     def get_task_count(obj):
@@ -114,19 +141,22 @@ class TaskSerializer(serializers.ModelSerializer):
         name = data['name']
         if Task.objects.filter(conference=conference, name=name).exclude(
                 id=getattr(self.instance, 'id', None)).exists():
-            raise serializers.ValidationError('وظیفه‌ای با این نام در این رویداد وجود دارد.')
+            raise serializers.ValidationError(
+                'وظیفه‌ای با این نام در این رویداد وجود دارد.')
 
         started_time = data['started_time']
         finished_time = data['finished_time']
         if started_time is not None and finished_time is not None:
             if started_time > finished_time:
-                raise serializers.ValidationError('زمان شروع نمی‌تواند بعد از زمان پایان باشد.')
+                raise serializers.ValidationError(
+                    'زمان شروع نمی‌تواند بعد از زمان پایان باشد.')
 
         return data
 
 
 class PersonTaskSerializer(serializers.ModelSerializer):
-    person_name = serializers.CharField(source='person.get_full_name', read_only=True)
+    person_name = serializers.CharField(
+        source='person.get_full_name', read_only=True)
     task_name = serializers.CharField(source='task.name', read_only=True)
 
     class Meta:
@@ -148,7 +178,8 @@ class PersonTaskSerializer(serializers.ModelSerializer):
             person = data['person']
             task = data['task']
             if PersonTask.objects.filter(person=person, task=task).exists():
-                raise serializers.ValidationError("This task is already assigned to this person.")
+                raise serializers.ValidationError(
+                    "This task is already assigned to this person.")
 
         if self.instance and data.get('status') == PersonTask.COMPLETED:
             if self.instance.status == PersonTask.COMPLETED:
