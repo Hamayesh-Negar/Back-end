@@ -27,29 +27,43 @@ class CategorySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"name": "Category with this name already exists in the conference"})
         return data
+    
+class PersonCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'name']
+        read_only_fields = ['id', 'name']
 
 
 class PersonSerializer(serializers.ModelSerializer):
-    categories = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(), many=True)
+    categories = serializers.SerializerMethodField()
     registered_by = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), required=False)
     full_name = serializers.CharField(source='get_full_name', read_only=True)
     task_count = serializers.SerializerMethodField()
     completed_task_count = serializers.SerializerMethodField()
+    assignments = serializers.SerializerMethodField()
 
     class Meta:
         model = Person
-        fields = ['id', 'conference', 'categories', 'first_name',
-                  'last_name', 'full_name', 'unique_code', 'hashed_unique_code', 'email', 'telephone',
-                  'is_active', 'task_count', 'completed_task_count', 'registered_by']
-        read_only_fields = ['registered_by', 'hashed_unique_code']
+        fields = ['id', 'categories', 'first_name',
+                  'last_name', 'full_name', 'unique_code', 'email', 'telephone',
+                  'is_active', 'task_count', 'assignments', 'completed_task_count', 'registered_by']
+        read_only_fields = ['registered_by', 'full_name',
+                            'task_count', 'completed_task_count']
 
     def get_task_count(self, obj):
         return obj.tasks.count()
 
     def get_completed_task_count(self, obj):
         return obj.tasks.filter(status=PersonTask.COMPLETED).count()
+
+    def get_assignments(self, obj):
+        assignments = PersonTask.objects.filter(person=obj)
+        return PersonTaskSerializer(assignments, many=True).data
+    
+    def get_categories(self, obj):
+        return PersonCategorySerializer(obj.categories.all(), many=True).data
 
     def create(self, validated_data):
         categories = validated_data.pop('categories', [])
@@ -155,15 +169,13 @@ class TaskSerializer(serializers.ModelSerializer):
 
 
 class PersonTaskSerializer(serializers.ModelSerializer):
-    person_name = serializers.CharField(
-        source='person.get_full_name', read_only=True)
     task_name = serializers.CharField(source='task.name', read_only=True)
 
     class Meta:
         model = PersonTask
         fields = [
-            'id', 'person', 'task', 'status', 'notes', 'completed_at',
-            'completed_by', 'person_name', 'task_name'
+            'id', 'task', 'status', 'notes', 'completed_at',
+            'completed_by', 'task_name'
         ]
         read_only_fields = ['completed_at', 'completed_by']
 
