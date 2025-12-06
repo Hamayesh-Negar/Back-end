@@ -3,6 +3,7 @@ from django.forms import TimeInput, ModelForm, ModelMultipleChoiceField, Checkbo
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.utils import timezone
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 
@@ -284,6 +285,8 @@ class PersonTaskAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if obj.status == 'completed' and not obj.completed_by:
             obj.completed_by = request.user
+            if not obj.completed_at:
+                obj.completed_at = timezone.now()
         obj.save()
 
     class Media:
