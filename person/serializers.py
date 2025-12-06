@@ -27,7 +27,8 @@ class CategorySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"name": "Category with this name already exists in the conference"})
         return data
-    
+
+
 class PersonCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -61,13 +62,16 @@ class PersonSerializer(serializers.ModelSerializer):
     def get_assignments(self, obj):
         assignments = PersonTask.objects.filter(person=obj)
         return PersonTaskSerializer(assignments, many=True).data
-    
+
     def get_categories(self, obj):
         return PersonCategorySerializer(obj.categories.all(), many=True).data
 
     def create(self, validated_data):
         categories = validated_data.pop('categories', [])
-        validated_data['registered_by'] = self.context['request'].user
+        user = self.context['request'].user
+        validated_data['registered_by'] = user
+        if hasattr(user, 'preference') and user.preference.selected_conference:
+            validated_data['conference'] = user.preference.selected_conference
         instance = super().create(validated_data)
         instance.categories.set(categories)
         return instance
