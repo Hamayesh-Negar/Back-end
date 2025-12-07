@@ -18,7 +18,7 @@ class PersonViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
-    search_fields = ['first_name', 'last_name', 'telephone', 'email']
+    search_fields = ['first_name', 'last_name', 'telephone', 'email', 'unique_code']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
 
@@ -37,10 +37,12 @@ class PersonViewSet(ModelViewSet):
         person = self.get_object()
         person.is_active = not person.is_active
         person.save()
+
+        message = 'فعال شد' if person.is_active else 'غیرفعال شد'
         return Response(
             {
                 'success': True,
-                'message': 'Person status updated successfully',
+                'message': f'کاربر با موفقیت {message}',
                 'person': self.get_serializer(person).data
             }
         )
