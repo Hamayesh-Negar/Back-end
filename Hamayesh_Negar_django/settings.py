@@ -20,7 +20,6 @@ INSTALLED_APPS = [
     "admin_interface",
     "colorfield",
     "import_export",
-    # 'crispy_forms',
     "widget_tweaks",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -29,6 +28,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework.authtoken",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "corsheaders",
     "rest_framework",
@@ -248,7 +249,7 @@ CSRF_USE_SESSIONS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
     "CORS_ALLOW_ORIGINS", "").split(" ") if origin.strip()] if not DEBUG else []
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = bool(DEBUG)
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
