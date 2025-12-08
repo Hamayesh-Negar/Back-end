@@ -37,7 +37,11 @@ class PersonCategorySerializer(serializers.ModelSerializer):
 
 
 class PersonSerializer(serializers.ModelSerializer):
-    categories = serializers.SerializerMethodField()
+    categories = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        many=True,
+        required=False
+    )
     registered_by = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), required=False)
     full_name = serializers.CharField(source='get_full_name', read_only=True)
@@ -63,9 +67,6 @@ class PersonSerializer(serializers.ModelSerializer):
         assignments = PersonTask.objects.filter(person=obj)
         return PersonTaskSerializer(assignments, many=True).data
 
-    def get_categories(self, obj):
-        return PersonCategorySerializer(obj.categories.all(), many=True).data
-
     def create(self, validated_data):
         categories = validated_data.pop('categories', [])
         user = self.context['request'].user
@@ -77,9 +78,14 @@ class PersonSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        categories = validated_data.pop('categories')
+        categories = validated_data.pop('categories', None)
         instance = super().update(instance, validated_data)
-        instance.categories.set(categories)
+        if categories is not None:
+            instance.categories.set(categories)
+        user = self.context['request'].user
+        validated_data['registered_by'] = user
+        if hasattr(user, 'preference') and user.preference.selected_conference:
+            validated_data['conference'] = user.preference.selected_conference
         return instance
 
     def validate_unique_code(self, value):
