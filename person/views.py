@@ -103,6 +103,73 @@ class PersonViewSet(ModelViewSet):
             }
         )
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def bulk_create(self, request):
+        from person.async_utils import bulk_create_persons, get_user_conference
+
+        persons_data = request.data.get('persons', [])
+        conference = request.data.get('conference')
+
+        if not persons_data:
+            return Response(
+                {'error': 'لیست افراد الزامی است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not isinstance(persons_data, list):
+            return Response(
+                {'error': 'persons باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not conference:
+            conference = async_to_sync(get_user_conference)(request.user)
+            if not conference:
+                return Response(
+                    {'error': 'آیدی رویداد الزامی است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        prepared_persons = []
+        for person_data in persons_data:
+            prepared_persons.append({
+                'conference': conference,
+                'first_name': person_data.get('first_name'),
+                'last_name': person_data.get('last_name'),
+                'email': person_data.get('email'),
+                'telephone': person_data.get('telephone'),
+                'gender': person_data.get('gender', 'male'),
+                'unique_code': person_data.get('unique_code', ''),
+            })
+
+        try:
+            created_persons = async_to_sync(bulk_create_persons)(
+                prepared_persons,
+                request.user
+            )
+
+            if persons_data and persons_data[0].get('categories'):
+                for i, person in enumerate(created_persons):
+                    categories = persons_data[i].get('categories', [])
+                    if categories:
+                        person.categories.set(categories)
+
+            return Response(
+                {
+                    'success': True,
+                    'message': f'{len(created_persons)} فرد با موفقیت ثبت شد',
+                    'count': len(created_persons),
+                    'persons': PersonListSerializer(created_persons, many=True).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {'error': f'خطا در ایجاد افراد: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     @action(detail=True, methods=['get'])
     async def tasks_summary(self, request, pk=None):
         from person.async_utils import get_person_tasks_count
