@@ -7,14 +7,28 @@ from user.models import User
 
 class CategorySerializer(serializers.ModelSerializer):
     members_count = serializers.SerializerMethodField()
+    tasks = serializers.PrimaryKeyRelatedField(
+        queryset=Task.objects.all(),
+        many=True,
+        required=False,
+        help_text="Tasks that will be auto-assigned to members of this category"
+    )
+    task_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
-        fields = ['id', 'conference', 'name', 'description', 'members_count']
+        fields = ['id', 'conference', 'name', 'description', 'tasks',
+                  'task_names', 'members_count', 'created_at', 'updated_at']
+        read_only_fields = ['task_names',
+                            'members_count', 'created_at', 'updated_at']
 
     @staticmethod
     def get_members_count(obj):
         return obj.members.count()
+
+    @staticmethod
+    def get_task_names(obj):
+        return [{"id": task.id, "name": task.name} for task in obj.tasks.all()]
 
     def validate(self, data):
         if self.instance:

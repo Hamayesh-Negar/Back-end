@@ -285,6 +285,68 @@ class CategoryViewSet(ModelViewSet):
         serializer = PersonSerializer(members, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], url_path='assign-tasks')
+    def assign_tasks(self, request, pk=None):
+        category = self.get_object()
+        task_ids = request.data.get('task_ids', [])
+
+        if not isinstance(task_ids, list):
+            return Response(
+                {'error': 'task_ids باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tasks = Task.objects.filter(
+            id__in=task_ids, conference=category.conference)
+
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': 'برخی از وظایف یافت نشدند یا به رویداد دیگری تعلق دارند'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        category.tasks.set(tasks)
+
+        for person in category.members.all():
+            category.assign_tasks_to_person(person)
+
+        return Response({
+            'success': True,
+            'message': f'{tasks.count()} وظیفه به دسته‌بندی اختصاص داده شد و به {category.members.count()} عضو تخصیص یافت',
+            'category': self.get_serializer(category).data
+        })
+
+    @action(detail=True, methods=['delete'], url_path='remove-tasks')
+    def remove_tasks(self, request, pk=None):
+        category = self.get_object()
+        task_ids = request.data.get('task_ids', [])
+
+        if not isinstance(task_ids, list):
+            return Response(
+                {'error': 'task_ids باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tasks_to_remove = category.tasks.filter(id__in=task_ids)
+        removed_count = tasks_to_remove.count()
+        category.tasks.remove(*tasks_to_remove)
+
+        return Response({
+            'success': True,
+            'message': f'{removed_count} وظیفه از دسته‌بندی حذف شد',
+            'category': self.get_serializer(category).data
+        })
+
+    @action(detail=True, methods=['get'], url_path='tasks')
+    def category_tasks(self, request, pk=None):
+        category = self.get_object()
+        tasks = category.tasks.all()
+        serializer = TaskSerializer(tasks, many=True)
+        return Response({
+            'count': tasks.count(),
+            'tasks': serializer.data
+        })
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.members.exists():

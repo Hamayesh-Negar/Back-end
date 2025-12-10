@@ -1,3 +1,4 @@
+from django.db.models.signals import m2m_changed
 import hashlib
 import uuid
 
@@ -10,9 +11,12 @@ from conference.models import Conference
 
 
 class Category(models.Model):
-    conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name='categories')
+    conference = models.ForeignKey(
+        Conference, on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=75)
     description = models.TextField(null=True, blank=True)
+    tasks = models.ManyToManyField('Task', related_name='categories', blank=True,
+                                   help_text="Tasks that will be auto-assigned to members of this category")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -24,6 +28,16 @@ class Category(models.Model):
     def __str__(self):
         return f"{self.name} - {self.conference.name}"
 
+    def assign_tasks_to_person(self, person):
+        from person.models import PersonTask
+
+        for task in self.tasks.all():
+            PersonTask.objects.get_or_create(
+                person=person,
+                task=task,
+                defaults={'status': PersonTask.PENDING}
+            )
+
 
 class Person(models.Model):
     GENDER_CHOICES = [
@@ -32,7 +46,8 @@ class Person(models.Model):
         ('other', 'Other'),
         ('unknown', 'Unknown'),
     ]
-    conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name='attendees')
+    conference = models.ForeignKey(
+        Conference, on_delete=models.CASCADE, related_name='attendees')
     categories = models.ManyToManyField('Category', related_name='members')
     unique_code = models.CharField(
         max_length=255,
@@ -49,9 +64,11 @@ class Person(models.Model):
     last_name = models.CharField(max_length=64)
     telephone = models.CharField(max_length=24, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default='male')
+    gender = models.CharField(
+        max_length=10, choices=GENDER_CHOICES, default='male')
     is_active = models.BooleanField(default=True)
-    registered_by = models.ForeignKey('user.User', on_delete=models.SET_NULL, null=True, editable=False)
+    registered_by = models.ForeignKey(
+        'user.User', on_delete=models.SET_NULL, null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -88,11 +105,24 @@ class Person(models.Model):
 @receiver(pre_save, sender=Person)
 def ensure_hashed_code(sender, instance, **kwargs):
     if instance.unique_code and not instance.hashed_unique_code:
-        instance.hashed_unique_code = instance.hash_unique_code(instance.unique_code)
+        instance.hashed_unique_code = instance.hash_unique_code(
+            instance.unique_code)
+
+
+@receiver(m2m_changed, sender=Person.categories.through)
+def auto_assign_category_tasks(sender, instance, action, pk_set, **kwargs):
+    if action == "post_add":
+        for category_id in pk_set:
+            try:
+                category = Category.objects.get(id=category_id)
+                category.assign_tasks_to_person(instance)
+            except Category.DoesNotExist:
+                pass
 
 
 class Task(models.Model):
-    conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name='tasks')
+    conference = models.ForeignKey(
+        Conference, on_delete=models.CASCADE, related_name='tasks')
     name = models.CharField(max_length=64)
     description = models.TextField(null=True, blank=True)
     is_required = models.BooleanField(default=True)
@@ -123,12 +153,16 @@ class PersonTask(models.Model):
         (CANCELLED, 'Cancelled'),
     ]
 
-    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='tasks')
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='assignments')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name='tasks')
+    task = models.ForeignKey(
+        Task, on_delete=models.CASCADE, related_name='assignments')
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=PENDING)
     notes = models.TextField(blank=True, null=True)
     completed_at = models.DateTimeField(null=True, blank=True)
-    completed_by = models.ForeignKey('user.User', on_delete=models.SET_NULL, null=True)
+    completed_by = models.ForeignKey(
+        'user.User', on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
