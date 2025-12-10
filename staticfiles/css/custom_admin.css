@@ -33,6 +33,22 @@
     background-color: #17a2b8;
 }
 
+.badge-primary {
+    color: #fff;
+    background-color: #007bff;
+    text-decoration: none;
+}
+
+.badge-primary:hover {
+    background-color: #0056b3;
+    color: #fff;
+}
+
+.badge-success {
+    color: #fff;
+    background-color: #28a745;
+}
+
 .badge-secondary {
     color: #fff;
     background-color: #6c757d;

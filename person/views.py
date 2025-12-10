@@ -1,5 +1,4 @@
-from unicodedata import category
-from django.utils import timezone
+from asgiref.sync import async_to_sync
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -11,6 +10,7 @@ from rest_framework.viewsets import ModelViewSet
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonListSerializer, PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
+from person.async_utils import create_person, update_person
 
 
 class PersonViewSet(ModelViewSet):
@@ -18,7 +18,8 @@ class PersonViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
-    search_fields = ['first_name', 'last_name', 'telephone', 'email']
+    search_fields = ['first_name', 'last_name',
+                     'telephone', 'email', 'unique_code']
     ordering_fields = ['created_at']
     pagination_class = LargeResultsSetPagination
 
@@ -32,98 +33,216 @@ class PersonViewSet(ModelViewSet):
             return PersonListSerializer
         return PersonSerializer
 
+    def create(self, request, *args, **kwargs):
+        from person.async_utils import get_user_conference
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        conference = serializer.validated_data.get('conference')
+        if not conference:
+            conference = async_to_sync(get_user_conference)(request.user)
+            if not conference:
+                return Response(
+                    {'error': 'آیدی رویداد الزامی است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            serializer.validated_data['conference'] = conference
+
+        person = async_to_sync(create_person)(
+            {
+                'conference': serializer.validated_data['conference'],
+                'first_name': serializer.validated_data['first_name'],
+                'last_name': serializer.validated_data['last_name'],
+                'email': serializer.validated_data.get('email'),
+                'telephone': serializer.validated_data.get('telephone'),
+                'gender': serializer.validated_data.get('gender', 'male'),
+                'unique_code': serializer.validated_data.get('unique_code', ''),
+            },
+            serializer.validated_data.get('categories', []),
+            request.user
+        )
+
+        return Response(
+            PersonSerializer(person, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        person_data = {k: v for k, v in serializer.validated_data.items()
+                       if k not in ['conference', 'registered_by', 'categories']}
+
+        categories_data = serializer.validated_data.get('categories')
+
+        person = async_to_sync(update_person)(
+            instance, person_data, categories_data)
+
+        return Response(
+            PersonSerializer(person, context={'request': request}).data
+        )
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_active(self, request, pk=None):
         person = self.get_object()
         person.is_active = not person.is_active
         person.save()
+
+        message = 'فعال شد' if person.is_active else 'غیرفعال شد'
         return Response(
             {
                 'success': True,
-                'message': 'Person status updated successfully',
+                'message': f'کاربر با موفقیت {message}',
                 'person': self.get_serializer(person).data
             }
         )
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def bulk_create(self, request):
+        from person.async_utils import bulk_create_persons, get_user_conference
+
+        persons_data = request.data.get('persons', [])
+        conference = request.data.get('conference')
+
+        if not persons_data:
+            return Response(
+                {'error': 'لیست افراد الزامی است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not isinstance(persons_data, list):
+            return Response(
+                {'error': 'persons باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not conference:
+            conference = async_to_sync(get_user_conference)(request.user)
+            if not conference:
+                return Response(
+                    {'error': 'آیدی رویداد الزامی است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        prepared_persons = []
+        for person_data in persons_data:
+            prepared_persons.append({
+                'conference': conference,
+                'first_name': person_data.get('first_name'),
+                'last_name': person_data.get('last_name'),
+                'email': person_data.get('email'),
+                'telephone': person_data.get('telephone'),
+                'gender': person_data.get('gender', 'male'),
+                'unique_code': person_data.get('unique_code', ''),
+            })
+
+        try:
+            created_persons = async_to_sync(bulk_create_persons)(
+                prepared_persons,
+                request.user
+            )
+
+            if persons_data and persons_data[0].get('categories'):
+                for i, person in enumerate(created_persons):
+                    categories = persons_data[i].get('categories', [])
+                    if categories:
+                        person.categories.set(categories)
+
+            return Response(
+                {
+                    'success': True,
+                    'message': f'{len(created_persons)} فرد با موفقیت ثبت شد',
+                    'count': len(created_persons),
+                    'persons': PersonListSerializer(created_persons, many=True).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {'error': f'خطا در ایجاد افراد: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     @action(detail=True, methods=['get'])
-    def tasks_summary(self, request, pk=None):
+    async def tasks_summary(self, request, pk=None):
+        from person.async_utils import get_person_tasks_count
+
         person = self.get_object()
-        tasks = person.tasks.select_related('task').all()
-        summary = {
-            'total': tasks.count(),
-            'completed': tasks.filter(status=PersonTask.COMPLETED).count(),
-            'pending': tasks.filter(status=PersonTask.PENDING).count(),
-        }
+        summary = await get_person_tasks_count(person)
         return Response(summary)
 
     @action(detail=False, methods=['post'])
-    def validate_unique_code(self, request):
+    async def validate_unique_code(self, request):
+        from person.async_utils import get_person_by_hashed_code
+
         hashed_unique_code = request.data.get('hashed_unique_code')
 
         if not hashed_unique_code:
-            return Response({'error': 'hashed_unique_code is required'})
+            return Response({'error': 'کد منحصر به فرد الزامی است'})
 
-        try:
-            person = Person.objects.get(hashed_unique_code=hashed_unique_code)
-            serializer = self.get_serializer(person)
-            return Response(serializer.data)
-        except Person.DoesNotExist:
-            return Response({'error': 'Person with this hashed unique code does not exist'}, status=status.HTTP_404_NOT_FOUND)
+        person = await get_person_by_hashed_code(hashed_unique_code)
+        if not person:
+            return Response(
+                {'error': 'فردی با این کد منحصر به فرد وجود ندارد'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(person)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
-    def submit_task(self, request):
+    async def submit_task(self, request):
+        from person.async_utils import (
+            get_person_by_hashed_code,
+            get_task_by_id,
+            get_person_task,
+            mark_person_task_completed
+        )
+
         hashed_unique_code = request.data.get('hashed_unique_code')
         task_id = request.data.get('task_id')
 
         if not hashed_unique_code:
-            return Response({
-                'error': 'unique_code is required'
-            })
+            return Response({'error': 'کد منحصر به فرد الزامی است'})
 
         if not task_id:
-            return Response({
-                'error': 'task_id is required'
-            })
+            return Response({'error': 'آیدی وظیفه الزامی است'})
 
-        try:
-            person = Person.objects.get(hashed_unique_code=hashed_unique_code)
-        except Person.DoesNotExist:
-            return Response({
-                'error': 'Person with this unique code does not exist'})
+        person = await get_person_by_hashed_code(hashed_unique_code)
+        if not person:
+            return Response({'error': 'فردی با این کد منحصر به فرد وجود ندارد'})
 
         if not person.is_active:
             return Response({
-                'error': 'Person is not active, Please contact the conference manager'
+                'error': 'فرد فعال نیست، لطفاً با مدیر رویداد تماس بگیرید'
             })
 
-        try:
-            task = Task.objects.get(id=task_id)
-        except Task.DoesNotExist:
-            return Response({
-                'error': 'Task with this ID does not exist'})
+        task = await get_task_by_id(task_id)
+        if not task:
+            return Response({'error': 'وظیفه‌ای با این آیدی وجود ندارد'})
 
-        try:
-            person_task = PersonTask.objects.get(person=person, task=task)
-        except PersonTask.DoesNotExist:
-            return Response({
-                'error': 'This task is not assigned to this person'})
+        person_task = await get_person_task(person, task)
+        if not person_task:
+            return Response({'error': 'این وظیفه به این فرد اختصاص داده نشده است'})
 
         if person_task.status == PersonTask.COMPLETED:
             return Response({
-                'error': 'This task has already been completed',
-                'person_task': PersonTaskSerializer(person_task).data})
+                'error': 'این وظیفه قبلاً تکمیل شده است',
+                'person_task': PersonTaskSerializer(person_task).data
+            })
 
-        person_task.status = PersonTask.COMPLETED
-        person_task.completed_at = timezone.now()
-
-        if request.user and request.user.is_authenticated:
-            person_task.completed_by = request.user
-
-        person_task.save()
+        person_task = await mark_person_task_completed(person_task, request.user)
 
         return Response({
             'success': True,
-            'message': f'Task "{task.name}" has been successfully completed for {person.get_full_name()}',
+            'message': f'وظیفه "{task.name}" با موفقیت برای {person.get_full_name()} تکمیل شد',
             'person_task': PersonTaskSerializer(person_task).data
         })
 
@@ -144,28 +263,89 @@ class CategoryViewSet(ModelViewSet):
             return Category.objects.filter(conference=user.preference.selected_conference.id)
 
     @action(detail=True, methods=['post'])
-    def bulk_add_members(self, request, pk=None):
+    async def bulk_add_members(self, request, pk=None):
+        from person.async_utils import add_category_members
+
         category = self.get_object()
         person_ids = request.data.get('person_ids', [])
 
-        persons = Person.objects.filter(
-            id__in=person_ids,
-            conference=category.conference
-        )
-
-        category.members.add(*persons)
+        category = await add_category_members(category, person_ids)
         return Response({
             'success': True,
-            'message': 'Members added successfully',
+            'message': 'اعضا با موفقیت اضافه شدند',
             'category': self.get_serializer(category).data
         })
 
     @action(detail=True, methods=['get'])
-    def members(self, request, pk=None):
+    async def members(self, request, pk=None):
+        from person.async_utils import get_category_members
+
         category = self.get_object()
-        members = category.members
+        members = await get_category_members(category)
         serializer = PersonSerializer(members, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='assign-tasks')
+    def assign_tasks(self, request, pk=None):
+        category = self.get_object()
+        task_ids = request.data.get('task_ids', [])
+
+        if not isinstance(task_ids, list):
+            return Response(
+                {'error': 'task_ids باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tasks = Task.objects.filter(
+            id__in=task_ids, conference=category.conference)
+
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': 'برخی از وظایف یافت نشدند یا به رویداد دیگری تعلق دارند'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        category.tasks.set(tasks)
+
+        for person in category.members.all():
+            category.assign_tasks_to_person(person)
+
+        return Response({
+            'success': True,
+            'message': f'{tasks.count()} وظیفه به دسته‌بندی اختصاص داده شد و به {category.members.count()} عضو تخصیص یافت',
+            'category': self.get_serializer(category).data
+        })
+
+    @action(detail=True, methods=['delete'], url_path='remove-tasks')
+    def remove_tasks(self, request, pk=None):
+        category = self.get_object()
+        task_ids = request.data.get('task_ids', [])
+
+        if not isinstance(task_ids, list):
+            return Response(
+                {'error': 'task_ids باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tasks_to_remove = category.tasks.filter(id__in=task_ids)
+        removed_count = tasks_to_remove.count()
+        category.tasks.remove(*tasks_to_remove)
+
+        return Response({
+            'success': True,
+            'message': f'{removed_count} وظیفه از دسته‌بندی حذف شد',
+            'category': self.get_serializer(category).data
+        })
+
+    @action(detail=True, methods=['get'], url_path='tasks')
+    def category_tasks(self, request, pk=None):
+        category = self.get_object()
+        tasks = category.tasks.all()
+        serializer = TaskSerializer(tasks, many=True)
+        return Response({
+            'count': tasks.count(),
+            'tasks': serializer.data
+        })
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -173,7 +353,7 @@ class CategoryViewSet(ModelViewSet):
             return Response(
                 {
                     'success': False,
-                    'message': 'Cannot delete category with existing members'
+                    'message': 'امکان حذف دسته‌بندی با اعضای موجود وجود ندارد'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -194,63 +374,46 @@ class TaskViewSet(ModelViewSet):
             return Task.objects.filter(conference=user.preference.selected_conference.id)
 
     @action(detail=True, methods=['post', 'delete'])
-    def bulk_assign(self, request, pk=None):
+    async def bulk_assign(self, request, pk=None):
+        from person.async_utils import bulk_assign_tasks, bulk_unassign_tasks
+
         task = self.get_object()
         person_ids = request.data.get('person_ids', [])
 
         if not isinstance(person_ids, list):
-            return Response({'error': 'person_ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'person_ids باید یک لیست باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if request.method == 'POST':
-            existing_assignments = set(
-                task.assignments.values_list('person_id', flat=True))
-            new_assignments = set(person_ids) - existing_assignments
+            count = await bulk_assign_tasks(task, person_ids)
 
-            bulk_assignments = [
-                PersonTask(
-                    task=task,
-                    person_id=person_id,
-                    status=PersonTask.PENDING
-                    # Basic validation
-                ) for person_id in new_assignments if isinstance(person_id, int)
-            ]
-            if not bulk_assignments:
-                return Response({'status': 'No new valid person IDs provided or all persons already assigned.'}, status=status.HTTP_200_OK)
+            if count == 0:
+                return Response(
+                    {'status': 'هیچ شناسه فرد جدید معتبری ارائه نشده است یا همه افراد قبلاً اختصاص داده شده‌اند.'},
+                    status=status.HTTP_200_OK
+                )
 
-            PersonTask.objects.bulk_create(bulk_assignments)
-            return Response({'status': f'{len(bulk_assignments)} Tasks assigned successfully.'})
-
+            return Response({'status': f'{count} وظیفه با موفقیت اختصاص داده شد.'})
         elif request.method == 'DELETE':
-            # Validate person_ids are integers
-            valid_person_ids = [
-                pid for pid in person_ids if isinstance(pid, int)]
-            if not valid_person_ids:
-                return Response({'error': 'No valid person IDs provided for deletion.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            deleted_count, _ = PersonTask.objects.filter(
-                task=task,
-                person_id__in=valid_person_ids
-            ).delete()
+            deleted_count = await bulk_unassign_tasks(task, person_ids)
 
             if deleted_count == 0:
-                return Response({'status': 'No matching assignments found for the provided person IDs.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {'status': 'هیچ تخصیص مطابقتی برای شناسه‌های فرد ارائه شده یافت نشد.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-            return Response({'status': f'{deleted_count} Task assignments deleted successfully.'})
+            return Response({'status': f'{deleted_count} تخصیص وظیفه با موفقیت حذف شد.'})
 
     @action(detail=True, methods=['get'])
-    def completion_stats(self, request, pk=None):
-        task = self.get_object()
-        total = task.assignments.count()
-        completed = task.assignments.filter(
-            status=PersonTask.COMPLETED).count()
-        pending = task.assignments.filter(status=PersonTask.PENDING).count()
+    async def completion_stats(self, request, pk=None):
+        from person.async_utils import get_task_completion_stats
 
-        return Response({
-            'total_assignments': total,
-            'completed': completed,
-            'pending': pending,
-            'completion_rate': round((completed / total * 100), 2) if total > 0 else 0
-        })
+        task = self.get_object()
+        stats = await get_task_completion_stats(task)
+        return Response(stats)
 
 
 class PersonTaskViewSet(ModelViewSet):
@@ -273,20 +436,22 @@ class PersonTaskViewSet(ModelViewSet):
         return PersonTask.objects.all()
 
     @action(detail=True, methods=['post'])
-    def mark_completed(self, request, pk=None):
+    async def mark_completed(self, request, pk=None):
+        from person.async_utils import mark_person_task_completed
+
         person_task = self.get_object()
         if person_task.status == PersonTask.COMPLETED:
             return Response(
-                {'error': 'This task is already completed'},
+                {'error': 'این وظیفه قبلا انجام شده است'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        person_task.mark_completed(request.user)
+        person_task = await mark_person_task_completed(person_task, request.user)
         serializer = self.get_serializer(person_task)
         return Response(
             {
                 'success': True,
-                'message': 'Task marked as completed',
+                'message': 'وظیفه انجام شد',
                 'person_task': serializer.data
             }
         )

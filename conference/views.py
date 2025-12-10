@@ -102,7 +102,7 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
                 if include_conference_permissions:
                     permissions = list(
                         membership.role.permissions.values_list('codename', flat=True))
-                    
+
                     conference_data['conference_permissions'] = {
                         'can_edit_conference': 'edit_conference' in permissions,
                         'can_delete_conference': 'delete_conference' in permissions,
@@ -144,7 +144,6 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
             'codename', flat=True)
 
         return Response({
-            'permissions': list(permissions),
             'status': membership.status,
             'can_view_tasks': 'view_tasks' in permissions,
             'can_view_categories': 'view_categories' in permissions,
@@ -153,7 +152,12 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
             'can_view_reports': 'view_reports' in permissions,
             'can_view_registration_forms': 'view_registration_forms' in permissions,
             'can_manage_qr_codes': 'qr_code_management' in permissions,
-            'can_scan_qr_codes': 'qr_code_scanning' in permissions
+            'can_scan_qr_codes': 'qr_code_scanning' in permissions,
+            'can_add_people': 'add_people' in permissions,
+            'can_approve_attendees': 'approve_people' in permissions,
+            'can_edit_people_info': 'edit_people_info' in permissions,
+            'can_change_people_status': 'change_status_people' in permissions,
+            'can_delete_people': 'delete_people' in permissions,
         }, status=status.HTTP_200_OK)
 
     def categories(self, request, slug=None):
