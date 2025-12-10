@@ -127,6 +127,7 @@
 /* fix [stacked, not-stacked] select options text overflow */
 .admin-interface .selector .selector-available select option,
 .admin-interface .selector .selector-chosen select option {
+    color: var(--body-fg) !important;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -134,6 +135,11 @@
 /* fix [not-stacked] equalize selectors height by adding the height of the .selector-available filter-bar */
 .admin-interface .selector:not(.stacked) .selector-chosen select {
     height: calc(46px + 17.2em) !important;
+}
+
+/* fix selected options color */
+.admin-interface .selector select option:checked {
+    color: inherit;
 }
 
 @media (max-width: 767px) {
