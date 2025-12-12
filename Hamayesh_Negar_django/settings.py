@@ -16,7 +16,7 @@ DEBUG = int(os.environ.get("DEBUG"))
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS").split(" ")
 
 INSTALLED_APPS = [
-    "jazzmin",
+    # "jazzmin",
     "admin_interface",
     "colorfield",
     "import_export",
@@ -231,10 +231,10 @@ STATICFILES_DIRS = [
 
 MEDIA_URL = '/media/'
 
-if not DEBUG:
-    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
