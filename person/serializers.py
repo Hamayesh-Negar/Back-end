@@ -39,7 +39,7 @@ class CategorySerializer(serializers.ModelSerializer):
         if Category.objects.filter(conference=conference, name=data['name']).exclude(
                 id=getattr(self.instance, 'id', None)).exists():
             raise serializers.ValidationError(
-                {"name": "Category with this name already exists in the conference"})
+                {"name": "دسته‌بندی با این نام در رویداد وجود دارد"})
         return data
 
 
@@ -56,6 +56,12 @@ class PersonSerializer(serializers.ModelSerializer):
         many=True,
         required=False
     )
+    tasks = serializers.PrimaryKeyRelatedField(
+        queryset=Task.objects.all(),
+        many=True,
+        required=False,
+        help_text="Tasks to assign directly to this person"
+    )
     registered_by = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), required=False)
     full_name = serializers.CharField(source='get_full_name', read_only=True)
@@ -65,7 +71,7 @@ class PersonSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Person
-        fields = ['id', 'categories', 'first_name',
+        fields = ['id', 'categories', 'tasks', 'first_name',
                   'last_name', 'full_name', 'unique_code', 'email', 'telephone',
                   'is_active', 'task_count', 'assignments', 'completed_task_count', 'registered_by']
         read_only_fields = ['registered_by', 'full_name',
@@ -82,24 +88,19 @@ class PersonSerializer(serializers.ModelSerializer):
         return PersonTaskSerializer(assignments, many=True).data
 
     def create(self, validated_data):
-        categories = validated_data.pop('categories', [])
+        validated_data.pop('categories', [])
+        validated_data.pop('tasks', [])
         user = self.context['request'].user
         validated_data['registered_by'] = user
         if hasattr(user, 'preference') and user.preference.selected_conference:
             validated_data['conference'] = user.preference.selected_conference
         instance = super().create(validated_data)
-        instance.categories.set(categories)
         return instance
 
     def update(self, instance, validated_data):
-        categories = validated_data.pop('categories', None)
+        validated_data.pop('categories', None)
+        validated_data.pop('tasks', None)
         instance = super().update(instance, validated_data)
-        if categories is not None:
-            instance.categories.set(categories)
-        user = self.context['request'].user
-        validated_data['registered_by'] = user
-        if hasattr(user, 'preference') and user.preference.selected_conference:
-            validated_data['conference'] = user.preference.selected_conference
         return instance
 
     def validate_unique_code(self, value):
@@ -108,18 +109,32 @@ class PersonSerializer(serializers.ModelSerializer):
                     unique_code=value
             ).exclude(id=self.instance.id if self.instance else None).exists():
                 raise serializers.ValidationError(
-                    "This unique code is already in use.")
+                    {"error": "این کد منحصر به فرد قبلاً استفاده شده است."})
         return value
 
     def validate(self, data):
-        if 'categories' in data and 'conference' in data:
+        conference = data.get('conference')
+        if not conference and self.instance:
+            conference = self.instance.conference
+
+        if 'categories' in data and conference:
             invalid_categories = [
                 cat for cat in data['categories']
-                if cat.conference_id != data['conference'].id
+                if cat.conference_id != conference.id
             ]
             if invalid_categories:
                 raise serializers.ValidationError({
-                    'categories': 'All categories must belong to the same conference'
+                    'categories': 'تمام دسته‌بندی‌ها باید متعلق به همان رویداد باشند'
+                })
+
+        if 'tasks' in data and conference:
+            invalid_tasks = [
+                task for task in data['tasks']
+                if task.conference_id != conference.id
+            ]
+            if invalid_tasks:
+                raise serializers.ValidationError({
+                    'tasks': 'تمام وظایف باید متعلق به همان رویداد باشند'
                 })
         return data
 
@@ -203,24 +218,30 @@ class PersonTaskSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['completed_at', 'completed_by']
 
+    def create(self, validated_data):
+        person = self.context.get('person') or validated_data.get('person')
+        if person:
+            validated_data['person'] = person
+        return super().create(validated_data)
+
     def validate(self, data):
         if 'task' in data and 'person' in data:
             if data['task'].conference_id != data['person'].conference_id:
                 raise serializers.ValidationError({
-                    'task': 'Task must belong to the same conference as the person'
+                    'error': 'وظیفه باید متعلق به همان رویدادی باشد که شخص در آن شرکت دارد.'
                 })
 
         if not self.instance:
-            person = data['person']
-            task = data['task']
-            if PersonTask.objects.filter(person=person, task=task).exists():
+            person = data.get('person')
+            task = data.get('task')
+            if person and task and PersonTask.objects.filter(person=person, task=task).exists():
                 raise serializers.ValidationError(
-                    "This task is already assigned to this person.")
+                    {"error": "این وظیفه قبلاً به این شخص اختصاص داده شده است."})
 
         if self.instance and data.get('status') == PersonTask.COMPLETED:
             if self.instance.status == PersonTask.COMPLETED:
                 raise serializers.ValidationError({
-                    'status': 'Task is already marked as completed'
+                    'error': 'این وظیفه قبلاً به عنوان تکمیل شده علامت گذاری شده است.'
                 })
 
             request = self.context.get('request')
