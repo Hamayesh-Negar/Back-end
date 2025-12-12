@@ -10,7 +10,6 @@ from rest_framework.viewsets import ModelViewSet
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonListSerializer, PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
-from person.async_utils import create_person, update_person
 
 
 class PersonViewSet(ModelViewSet):
@@ -34,7 +33,7 @@ class PersonViewSet(ModelViewSet):
         return PersonSerializer
 
     def create(self, request, *args, **kwargs):
-        from person.async_utils import get_user_conference
+        from person.async_utils import get_user_conference, assign_categories_to_person, assign_tasks_to_person
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -49,19 +48,16 @@ class PersonViewSet(ModelViewSet):
                 )
             serializer.validated_data['conference'] = conference
 
-        person = async_to_sync(create_person)(
-            {
-                'conference': serializer.validated_data['conference'],
-                'first_name': serializer.validated_data['first_name'],
-                'last_name': serializer.validated_data['last_name'],
-                'email': serializer.validated_data.get('email'),
-                'telephone': serializer.validated_data.get('telephone'),
-                'gender': serializer.validated_data.get('gender', 'male'),
-                'unique_code': serializer.validated_data.get('unique_code', ''),
-            },
-            serializer.validated_data.get('categories', []),
-            request.user
-        )
+        category_ids = request.data.get('categories', [])
+        task_ids = request.data.get('tasks', [])
+
+        person = serializer.save()
+
+        if category_ids:
+            person = async_to_sync(assign_categories_to_person)(
+                person, category_ids)
+        if task_ids:
+            person = async_to_sync(assign_tasks_to_person)(person, task_ids)
 
         return Response(
             PersonSerializer(person, context={'request': request}).data,
@@ -69,6 +65,8 @@ class PersonViewSet(ModelViewSet):
         )
 
     def update(self, request, *args, **kwargs):
+        from person.async_utils import assign_categories_to_person, assign_tasks_to_person
+
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
@@ -76,13 +74,18 @@ class PersonViewSet(ModelViewSet):
             instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
-        person_data = {k: v for k, v in serializer.validated_data.items()
-                       if k not in ['conference', 'registered_by', 'categories']}
+        category_ids = [cat.id for cat in request.data.get(
+            'categories', [])] if 'categories' in request.data else None
+        task_ids = [task.id for task in request.data.get(
+            'tasks', [])] if 'tasks' in request.data else None
 
-        categories_data = serializer.validated_data.get('categories')
+        person = serializer.save()
 
-        person = async_to_sync(update_person)(
-            instance, person_data, categories_data)
+        if category_ids is not None:
+            person = async_to_sync(assign_categories_to_person)(
+                person, category_ids)
+        if task_ids is not None:
+            person = async_to_sync(assign_tasks_to_person)(person, task_ids)
 
         return Response(
             PersonSerializer(person, context={'request': request}).data
@@ -252,7 +255,6 @@ class CategoryViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active']
     search_fields = ['name', 'description']
     ordering_fields = ['members_count']
     pagination_class = LargeResultsSetPagination

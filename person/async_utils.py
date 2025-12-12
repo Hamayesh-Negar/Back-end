@@ -61,6 +61,25 @@ def mark_person_task_completed(person_task, user):
 
 
 @sync_to_async
+def assign_categories_to_person(person, category_ids):
+    if category_ids is not None:
+        person.categories.set(category_ids)
+    return person
+
+
+@sync_to_async
+def assign_tasks_to_person(person, task_ids):
+    if task_ids:
+        for task_id in task_ids:
+            PersonTask.objects.get_or_create(
+                person=person,
+                task_id=task_id,
+                defaults={'status': PersonTask.PENDING}
+            )
+    return person
+
+
+@sync_to_async
 def get_task_completion_stats(task):
     total = task.assignments.count()
     completed = task.assignments.filter(status=PersonTask.COMPLETED).count()
@@ -120,42 +139,6 @@ def bulk_unassign_tasks(task, person_ids):
     ).delete()
 
     return deleted_count
-
-
-@sync_to_async
-def create_person(person_data, categories_data, user):
-    if not person_data.get('conference'):
-        raise ValueError("Conference is required to create a person")
-
-    person = Person.objects.create(
-        conference=person_data['conference'],
-        first_name=person_data['first_name'],
-        last_name=person_data['last_name'],
-        email=person_data.get('email'),
-        telephone=person_data.get('telephone'),
-        gender=person_data.get('gender', 'male'),
-        unique_code=person_data.get('unique_code', ''),
-        registered_by=user
-    )
-
-    if categories_data:
-        person.categories.set(categories_data)
-
-    return person
-
-
-@sync_to_async
-def update_person(person, person_data, categories_data=None):
-    for key, value in person_data.items():
-        if key != 'conference' and hasattr(person, key):
-            setattr(person, key, value)
-
-    person.save()
-
-    if categories_data is not None:
-        person.categories.set(categories_data)
-
-    return person
 
 
 @sync_to_async
