@@ -32,6 +32,22 @@ class PersonViewSet(ModelViewSet):
             return PersonListSerializer
         return PersonSerializer
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            response.data['total'] = queryset.count()
+            return response
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'results': serializer.data,
+            'total': queryset.count()
+        })
+
     def create(self, request, *args, **kwargs):
         from person.async_utils import get_user_conference, assign_categories_to_person, assign_tasks_to_person
 
