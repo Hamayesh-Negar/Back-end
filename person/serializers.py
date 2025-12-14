@@ -72,7 +72,7 @@ class PersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Person
         fields = ['id', 'categories', 'tasks', 'first_name',
-                  'last_name', 'full_name', 'unique_code', 'email', 'telephone',
+                  'last_name', 'full_name', 'unique_code', 'email', 'telephone', 'gender',
                   'is_active', 'task_count', 'assignments', 'completed_task_count', 'registered_by']
         read_only_fields = ['registered_by', 'full_name',
                             'task_count', 'completed_task_count']

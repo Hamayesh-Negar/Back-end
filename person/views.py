@@ -217,6 +217,35 @@ class PersonViewSet(ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
+    def check_unique_code(self, request):
+        unique_code = request.data.get('unique_code')
+
+        if not unique_code:
+            return Response(
+                {'error': 'کد منحصر به فرد الزامی است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'لطفاً یک رویداد انتخاب کنید'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        conference = user.preference.selected_conference
+
+        exists = Person.objects.filter(
+            unique_code=unique_code,
+            conference=conference
+        ).exists()
+
+        return Response({
+            'unique_code': unique_code,
+            'is_used': exists,
+        })
+
+    @action(detail=False, methods=['post'])
     async def submit_task(self, request):
         from person.async_utils import (
             get_person_by_hashed_code,
