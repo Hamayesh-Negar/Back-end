@@ -82,6 +82,7 @@ class PersonViewSet(ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         from person.async_utils import assign_categories_to_person, assign_tasks_to_person
+        from person.models import PersonTask
 
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -90,10 +91,8 @@ class PersonViewSet(ModelViewSet):
             instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
-        category_ids = [cat.id for cat in request.data.get(
-            'categories', [])] if 'categories' in request.data else None
-        task_ids = [task.id for task in request.data.get(
-            'tasks', [])] if 'tasks' in request.data else None
+        category_ids = request.data.get('categories', [])
+        task_ids = request.data.get('tasks', [])
 
         person = serializer.save()
 
@@ -101,6 +100,8 @@ class PersonViewSet(ModelViewSet):
             person = async_to_sync(assign_categories_to_person)(
                 person, category_ids)
         if task_ids is not None:
+            PersonTask.objects.filter(person=person).exclude(
+                task_id__in=task_ids).delete()
             person = async_to_sync(assign_tasks_to_person)(person, task_ids)
 
         return Response(
@@ -190,11 +191,11 @@ class PersonViewSet(ModelViewSet):
             )
 
     @action(detail=True, methods=['get'])
-    async def tasks_summary(self, request, pk=None):
+    def tasks_summary(self, request, pk=None):
         from person.async_utils import get_person_tasks_count
 
         person = self.get_object()
-        summary = await get_person_tasks_count(person)
+        summary = async_to_sync(get_person_tasks_count)(person)
         return Response(summary)
 
     @action(detail=False, methods=['post'])
@@ -246,7 +247,7 @@ class PersonViewSet(ModelViewSet):
         })
 
     @action(detail=False, methods=['post'])
-    async def submit_task(self, request):
+    def submit_task(self, request):
         from person.async_utils import (
             get_person_by_hashed_code,
             get_task_by_id,
@@ -263,7 +264,7 @@ class PersonViewSet(ModelViewSet):
         if not task_id:
             return Response({'error': 'آیدی وظیفه الزامی است'})
 
-        person = await get_person_by_hashed_code(hashed_unique_code)
+        person = async_to_sync(get_person_by_hashed_code)(hashed_unique_code)
         if not person:
             return Response({'error': 'فردی با این کد منحصر به فرد وجود ندارد'})
 
@@ -272,11 +273,11 @@ class PersonViewSet(ModelViewSet):
                 'error': 'فرد فعال نیست، لطفاً با مدیر رویداد تماس بگیرید'
             })
 
-        task = await get_task_by_id(task_id)
+        task = async_to_sync(get_task_by_id)(task_id)
         if not task:
             return Response({'error': 'وظیفه‌ای با این آیدی وجود ندارد'})
 
-        person_task = await get_person_task(person, task)
+        person_task = async_to_sync(get_person_task)(person, task)
         if not person_task:
             return Response({'error': 'این وظیفه به این فرد اختصاص داده نشده است'})
 
@@ -286,7 +287,8 @@ class PersonViewSet(ModelViewSet):
                 'person_task': PersonTaskSerializer(person_task).data
             })
 
-        person_task = await mark_person_task_completed(person_task, request.user)
+        person_task = async_to_sync(mark_person_task_completed)(
+            person_task, request.user)
 
         return Response({
             'success': True,
