@@ -11,7 +11,6 @@ class CategorySerializer(serializers.ModelSerializer):
         queryset=Task.objects.all(),
         many=True,
         required=False,
-        help_text="Tasks that will be auto-assigned to members of this category"
     )
     task_names = serializers.SerializerMethodField()
 
@@ -51,16 +50,12 @@ class PersonCategorySerializer(serializers.ModelSerializer):
 
 
 class PersonSerializer(serializers.ModelSerializer):
-    categories = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        many=True,
-        required=False
-    )
+    categories = serializers.SerializerMethodField()
     tasks = serializers.PrimaryKeyRelatedField(
         queryset=Task.objects.all(),
         many=True,
         required=False,
-        help_text="Tasks to assign directly to this person"
+        write_only=True,
     )
     registered_by = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), required=False)
@@ -74,8 +69,19 @@ class PersonSerializer(serializers.ModelSerializer):
         fields = ['id', 'categories', 'tasks', 'first_name',
                   'last_name', 'full_name', 'unique_code', 'email', 'telephone', 'gender',
                   'is_active', 'task_count', 'assignments', 'completed_task_count', 'registered_by']
-        read_only_fields = ['registered_by', 'full_name',
+        read_only_fields = ['registered_by', 'full_name', 'categories',
                             'task_count', 'completed_task_count']
+
+    def get_categories(self, obj):
+        categories = obj.categories.all()
+        return [
+            {
+                'id': cat.id,
+                'name': cat.name,
+                'description': cat.description
+            }
+            for cat in categories
+        ]
 
     def get_task_count(self, obj):
         return obj.tasks.count()
