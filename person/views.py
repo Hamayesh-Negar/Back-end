@@ -296,6 +296,51 @@ class PersonViewSet(ModelViewSet):
             'person_task': PersonTaskSerializer(person_task).data
         })
 
+    @action(detail=False, methods=['post'])
+    def retain_task(self, request):
+        from person.async_utils import (
+            get_person_by_hashed_code,
+            get_task_by_id,
+            get_person_task
+        )
+
+        hashed_unique_code = request.data.get('hashed_unique_code')
+        task_id = request.data.get('task_id')
+
+        if not hashed_unique_code:
+            return Response({'error': 'کد منحصر به فرد الزامی است'})
+
+        if not task_id:
+            return Response({'error': 'آیدی وظیفه الزامی است'})
+
+        person = async_to_sync(get_person_by_hashed_code)(hashed_unique_code)
+        if not person:
+            return Response({'error': 'فردی با این کد منحصر به فرد وجود ندارد'})
+
+        task = async_to_sync(get_task_by_id)(task_id)
+        if not task:
+            return Response({'error': 'وظیفه‌ای با این آیدی وجود ندارد'})
+
+        person_task = async_to_sync(get_person_task)(person, task)
+        if not person_task:
+            return Response({'error': 'این وظیفه به این فرد اختصاص داده نشده است'})
+
+        if person_task.status != PersonTask.COMPLETED:
+            return Response({
+                'error': 'این وظیفه تکمیل نشده است',
+                'person_task': PersonTaskSerializer(person_task).data
+            })
+
+        person_task.status = PersonTask.PENDING
+        person_task.completed_at = None
+        person_task.save()
+
+        return Response({
+            'success': True,
+            'message': f'وظیفه "{task.name}" برای {person.get_full_name()} لغو شد',
+            'person_task': PersonTaskSerializer(person_task).data
+        })
+
 
 class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
