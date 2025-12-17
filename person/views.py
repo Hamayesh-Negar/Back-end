@@ -99,6 +99,18 @@ class PersonViewSet(ModelViewSet):
         if category_ids is not None:
             person = async_to_sync(assign_categories_to_person)(
                 person, category_ids)
+
+            for category_id in category_ids:
+                try:
+                    category = Category.objects.get(id=category_id)
+                    category.assign_tasks_to_person(person)
+
+                    task_ids.extend(
+                        category.tasks.values_list('id', flat=True)
+                    )
+                except Category.DoesNotExist:
+                    pass
+
         if task_ids is not None:
             PersonTask.objects.filter(person=person).exclude(
                 task_id__in=task_ids).delete()
