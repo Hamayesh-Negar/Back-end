@@ -521,6 +521,29 @@ class TaskViewSet(ModelViewSet):
         stats = await get_task_completion_stats(task)
         return Response(stats)
 
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        from person.async_utils import reorder_tasks
+
+        orders = request.data.get('orders', [])
+        if not orders:
+            return Response(
+                {'error': 'لیست ترتیب‌ها الزامی است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'رویدادی انتخاب نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        conference_id = user.preference.selected_conference.id
+        updated_count = async_to_sync(reorder_tasks)(orders, conference_id)
+
+        return Response({'status': f'ترتیب {updated_count} وظیفه با موفقیت بروزرسانی شد'})
+
 
 class PersonTaskViewSet(ModelViewSet):
     serializer_class = PersonTaskSerializer

@@ -94,6 +94,18 @@ def get_task_completion_stats(task):
 
 
 @sync_to_async
+def reorder_tasks(orders, conference_id):
+    updated_count = 0
+    for item in orders:
+        task_id = item.get('id')
+        new_order = item.get('order')
+        if task_id is not None and new_order is not None:
+            updated_count += Task.objects.filter(
+                id=task_id, conference_id=conference_id).update(order=new_order)
+    return updated_count
+
+
+@sync_to_async
 def add_category_members(category, person_ids):
     persons = Person.objects.filter(
         id__in=person_ids,
