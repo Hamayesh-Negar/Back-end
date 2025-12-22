@@ -129,15 +129,24 @@ class Task(models.Model):
     is_active = models.BooleanField(default=True)
     started_time = models.TimeField(null=True, blank=True)
     finished_time = models.TimeField(null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = ['order', 'name']
         unique_together = ['conference', 'name']
 
     def __str__(self):
         return f"{self.name} - {self.conference.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.pk and self.order == 0:
+            max_order = Task.objects.filter(conference=self.conference).aggregate(
+                max_order=models.Max('order')
+            )['max_order']
+            self.order = (max_order or 0) + 1
+        super().save(*args, **kwargs)
 
 
 class PersonTask(models.Model):

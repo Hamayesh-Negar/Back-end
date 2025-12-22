@@ -178,7 +178,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'conference', 'name', 'description', 'is_required',
-            'is_active', 'started_time', 'finished_time', 'assignment_count',
+            'is_active', 'started_time', 'finished_time', 'order', 'assignment_count',
             'completion_rate', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']

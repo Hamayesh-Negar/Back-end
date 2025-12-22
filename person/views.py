@@ -472,7 +472,7 @@ class TaskViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
-    ordering_fields = ['name', 'due_date', 'created_at']
+    ordering_fields = ['order', 'name', 'created_at']
 
     def get_queryset(self):
         user = self.request.user
