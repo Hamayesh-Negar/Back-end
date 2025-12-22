@@ -10,13 +10,14 @@ from rest_framework.viewsets import ModelViewSet
 from person.models import Person, Category, PersonTask, Task
 from person.pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from person.serializers import PersonListSerializer, PersonSerializer, CategorySerializer, TaskSerializer, PersonTaskSerializer
+from person.filters import PersonFilter
 
 
 class PersonViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active']
+    filterset_class = PersonFilter
     search_fields = ['first_name', 'last_name',
                      'telephone', 'email', 'unique_code']
     ordering_fields = ['created_at']
@@ -130,8 +131,7 @@ class PersonViewSet(ModelViewSet):
         return Response(
             {
                 'success': True,
-                'message': f'کاربر با موفقیت {message}',
-                'person': self.get_serializer(person).data
+                'status': f'کاربر با موفقیت {message}'
             }
         )
 
