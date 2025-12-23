@@ -45,6 +45,27 @@ class RegisterView(APIView):
             except UserPreference.DoesNotExist:
                 preference_data = None
 
+            try:
+                login_url = f"{settings.FRONTEND_URL}/login/"
+                context = {
+                    'user': user,
+                    'login_url': login_url,
+                }
+
+                html_message = render_to_string(
+                    'welcome_email.html', context)
+
+                email_msg = EmailMessage(
+                    subject='خوش آمدید - Hamayesh Negar',
+                    body=html_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[user.email],
+                )
+                email_msg.content_subtype = 'html'
+                email_msg.send(fail_silently=False)
+            except Exception as e:
+                logger.error(f"Error sending welcome email: {str(e)}")
+
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
