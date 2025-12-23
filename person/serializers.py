@@ -181,7 +181,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'is_active', 'started_time', 'finished_time', 'order', 'assignment_count',
             'completion_rate', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'conference']
 
     @staticmethod
     def get_assignment_count(obj):
@@ -196,15 +196,8 @@ class TaskSerializer(serializers.ModelSerializer):
         return round((completed / total) * 100, 2)
 
     def validate(self, data):
-        conference = data['conference']
-        name = data['name']
-        if Task.objects.filter(conference=conference, name=name).exclude(
-                id=getattr(self.instance, 'id', None)).exists():
-            raise serializers.ValidationError(
-                'وظیفه‌ای با این نام در این رویداد وجود دارد.')
-
-        started_time = data['started_time']
-        finished_time = data['finished_time']
+        started_time = data.get('started_time')
+        finished_time = data.get('finished_time')
         if started_time is not None and finished_time is not None:
             if started_time > finished_time:
                 raise serializers.ValidationError(
@@ -215,12 +208,13 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class PersonTaskSerializer(serializers.ModelSerializer):
     task_name = serializers.CharField(source='task.name', read_only=True)
+    task_order = serializers.IntegerField(source='task.order', read_only=True)
 
     class Meta:
         model = PersonTask
         fields = [
             'id', 'task', 'status', 'notes', 'completed_at',
-            'completed_by', 'task_name'
+            'completed_by', 'task_name', 'task_order'
         ]
         read_only_fields = ['completed_at', 'completed_by']
 

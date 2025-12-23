@@ -479,6 +479,56 @@ class TaskViewSet(ModelViewSet):
         if hasattr(user, 'preference') and user.preference.selected_conference:
             return Task.objects.filter(conference=user.preference.selected_conference.id)
 
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'رویدادی انتخاب نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        conference = user.preference.selected_conference
+        name = request.data.get('name')
+
+        if Task.objects.filter(conference=conference, name=name).exists():
+            return Response(
+                {'error': 'وظیفه‌ای با این نام در این رویداد وجود دارد.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data['conference'] = conference
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'رویدادی انتخاب نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        instance = self.get_object()
+        conference = user.preference.selected_conference
+        name = request.data.get('name', instance.name)
+
+        if Task.objects.filter(conference=conference, name=name).exclude(id=instance.id).exists():
+            return Response(
+                {'error': 'وظیفه‌ای با این نام در این رویداد وجود دارد.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data['conference'] = conference
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post', 'delete'])
     async def bulk_assign(self, request, pk=None):
         from person.async_utils import bulk_assign_tasks, bulk_unassign_tasks
