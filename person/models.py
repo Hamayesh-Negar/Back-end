@@ -102,6 +102,15 @@ class Person(models.Model):
         super().save(*args, **kwargs)
 
 
+@receiver(m2m_changed, sender=Person)
+def generate_hashed_code_on_add(sender, instance, action, **kwargs):
+    if action == "post_add":
+        if instance.unique_code and not instance.hashed_unique_code:
+            instance.hashed_unique_code = instance.hash_unique_code(
+                instance.unique_code)
+            instance.save()
+
+
 @receiver(pre_save, sender=Person)
 def ensure_hashed_code(sender, instance, **kwargs):
     if instance.unique_code and not instance.hashed_unique_code:
