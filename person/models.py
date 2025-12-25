@@ -91,31 +91,19 @@ class Person(models.Model):
         return hashlib.sha256(str(code).encode()).hexdigest()
 
     def save(self, *args, **kwargs):
-        if not self.unique_code:
-            self.unique_code = self.generate_unique_code()
-
-        self.hashed_unique_code = self.hash_unique_code(self.unique_code)
-
         if not self.pk and not self.registered_by and hasattr(kwargs, 'request'):
             self.registered_by = kwargs.pop('request').user
 
         super().save(*args, **kwargs)
 
 
-@receiver(m2m_changed, sender=Person)
-def generate_hashed_code_on_add(sender, instance, action, **kwargs):
-    if action == "post_add":
-        if instance.unique_code and not instance.hashed_unique_code:
-            instance.hashed_unique_code = instance.hash_unique_code(
-                instance.unique_code)
-            instance.save()
-
-
 @receiver(pre_save, sender=Person)
 def ensure_hashed_code(sender, instance, **kwargs):
-    if instance.unique_code and not instance.hashed_unique_code:
-        instance.hashed_unique_code = instance.hash_unique_code(
-            instance.unique_code)
+    if not instance.unique_code:
+        instance.unique_code = instance.generate_unique_code()
+
+    instance.hashed_unique_code = instance.hash_unique_code(
+        instance.unique_code)
 
 
 @receiver(m2m_changed, sender=Person.categories.through)
