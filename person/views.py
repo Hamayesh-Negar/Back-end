@@ -1,4 +1,5 @@
 from asgiref.sync import async_to_sync
+from django.db.models import Count
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -360,13 +361,48 @@ class CategoryViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend,
                        filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
-    ordering_fields = ['members_count']
+    ordering_fields = ['name', 'created_at', 'updated_at', 'members_count']
     pagination_class = LargeResultsSetPagination
 
     def get_queryset(self):
         user = self.request.user
         if hasattr(user, 'preference') and user.preference.selected_conference:
-            return Category.objects.filter(conference=user.preference.selected_conference.id)
+            queryset = Category.objects.filter(
+                conference=user.preference.selected_conference.id)
+            queryset = queryset.annotate(members_count=Count('members'))
+            return queryset
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'رویدادی انتخاب نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data['conference'] = user.preference.selected_conference
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        user = request.user
+        if not hasattr(user, 'preference') or not user.preference.selected_conference:
+            return Response(
+                {'error': 'رویدادی انتخاب نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data['conference'] = user.preference.selected_conference
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     async def bulk_add_members(self, request, pk=None):

@@ -18,7 +18,7 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'conference', 'name', 'description', 'tasks',
                   'task_names', 'members_count', 'created_at', 'updated_at']
-        read_only_fields = ['task_names',
+        read_only_fields = ['conference', 'task_names',
                             'members_count', 'created_at', 'updated_at']
 
     @staticmethod
