@@ -147,6 +147,7 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
             'status': membership.status,
             'can_view_tasks': 'view_tasks' in permissions,
             'can_view_categories': 'view_categories' in permissions,
+            'can_manage_categories': 'manage_categories' in permissions,
             'can_view_people': 'view_people' in permissions,
             'can_view_members': 'view_members' in permissions,
             'can_view_reports': 'view_reports' in permissions,
