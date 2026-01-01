@@ -24,3 +24,5 @@ python-dotenv
 psycopg2-binary
 dj-database-url
 whitenoise[brotli]
+firebase-admin
+
