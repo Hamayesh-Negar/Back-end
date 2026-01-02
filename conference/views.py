@@ -1,4 +1,5 @@
 from typing import Union, cast
+import logging
 
 from django.db import models
 from django.db.models import QuerySet
@@ -11,17 +12,27 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from conference.models import Conference, ConferenceRole, ConferenceMember, ConferenceInvitation, ConferencePermission
+from conference.models import (
+    Conference, ConferenceRole, ConferenceMember, ConferenceInvitation,
+    ConferencePermission, InvitationPermission, UserFCMDevice, ConferenceMemberPermission
+)
 from conference.serializers import (
-    ConferenceDetailSerializer, ConferenceSerializer, ConferenceRoleSerializer, ConferenceMemberSerializer,
-    ConferenceInvitationSerializer, ConferencePermissionSerializer
+    ConferenceDetailSerializer, ConferenceSerializer, ConferenceRoleSerializer,
+    ConferenceMemberSerializer, ConferenceMemberDetailSerializer, ConferenceInvitationSerializer,
+    ConferencePermissionSerializer, ConferenceInvitationWithPermissionsSerializer,
+    UserFCMDeviceSerializer, ConferenceMemberPermissionSerializer,
+    MemberPermissionUpdateSerializer, MemberPermissionGrantSerializer,
+    MemberPermissionRevokeSerializer
 )
 from conference.permissions import (
     ConferencePermissionMixin, ConferenceSecretaryRequiredMixin,
     ConferenceExecutiveRequiredMixin
 )
+from conference.fcm_service import fcm_service
 from person.serializers import CategorySerializer
 from user.permissions import IsSuperuser
+
+logger = logging.getLogger(__name__)
 
 
 class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
@@ -97,11 +108,13 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
                     'role': membership.role.name,
                     'role_type': membership.role.role_type,
                     'status': membership.status,
+                    'has_direct_permissions': membership.direct_permissions.exists(),
                 }
 
                 if include_conference_permissions:
+                    # Use combined permissions (role + direct)
                     permissions = list(
-                        membership.role.permissions.values_list('codename', flat=True))
+                        membership.get_permissions().values_list('codename', flat=True))
 
                     conference_data['conference_permissions'] = {
                         'can_edit_conference': 'edit_conference' in permissions,
@@ -140,11 +153,15 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
                 'error': 'کاربر عضو رویداد نمیباشد.'
             }, status=status.HTTP_200_OK)
 
-        permissions = membership.role.permissions.values_list(
-            'codename', flat=True)
+        # Use combined permissions (role + direct)
+        permissions = list(
+            membership.get_permissions().values_list('codename', flat=True))
 
         return Response({
             'status': membership.status,
+            'role': membership.role.name,
+            'role_type': membership.role.role_type,
+            'has_direct_permissions': membership.direct_permissions.exists(),
             'can_view_tasks': 'view_tasks' in permissions,
             'can_view_categories': 'view_categories' in permissions,
             'can_manage_categories': 'manage_categories' in permissions,
@@ -286,7 +303,9 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
         conference = self.get_object()
 
         try:
-            membership = ConferenceMember.objects.get(
+            membership = ConferenceMember.objects.select_related('role').prefetch_related(
+                'direct_permissions', 'direct_permissions__permission'
+            ).get(
                 user=request.user,
                 conference=conference
             )
@@ -296,8 +315,12 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
                     'role': membership.role.name,
                     'role_type': membership.role.role_type,
                     'status': membership.status,
-                    'joined_at': membership.created_at,
-                    'permissions': list(membership.role.permissions.values_list('codename', flat=True))
+                    'joined_at': membership.joined_at,
+                    'permissions': list(membership.get_permissions().values_list('codename', flat=True)),
+                    'role_permissions': list(membership.get_role_permissions().values_list('codename', flat=True)),
+                    'direct_granted_permissions': list(membership.get_direct_permissions().values_list('codename', flat=True)),
+                    'revoked_permissions': list(membership.get_revoked_permissions().values_list('codename', flat=True)),
+                    'has_direct_permissions': membership.direct_permissions.exists(),
                 },
                 'message': self.get_membership_status_message(membership)
             })
@@ -335,37 +358,34 @@ class ConferenceViewSet(ConferencePermissionMixin, ModelViewSet):
 
 
 class ConferenceRoleViewSet(ConferenceSecretaryRequiredMixin, ModelViewSet):
-    """ViewSet for managing conference roles - Secretary only"""
     serializer_class = ConferenceRoleSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        conference = self.kwargs.get('conference_slug')
-        if conference:
-            return ConferenceRole.objects.filter(conference_id=conference)
+        conference_slug = self.kwargs.get('conference_slug')
+        if conference_slug:
+            return ConferenceRole.objects.filter(conference__slug=conference_slug)
         return ConferenceRole.objects.none()
 
     def perform_create(self, serializer):
-        conference_id = self.kwargs.get('conference_id')
-        conference = get_object_or_404(Conference, pk=conference_id)
+        conference_slug = self.kwargs.get('conference_slug')
+        conference = get_object_or_404(Conference, slug=conference_slug)
         serializer.save(conference=conference)
 
 
 class ConferencePermissionViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
-    """ViewSet for viewing conference permissions"""
     serializer_class = ConferencePermissionSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ['get']
 
     def get_queryset(self):
-        conference = self.kwargs.get('conference_slug')
-        if conference:
-            return ConferencePermission.objects.filter(roles__conference=conference)
+        conference_slug = self.kwargs.get('conference_slug')
+        if conference_slug:
+            return ConferencePermission.objects.filter(roles__conference__slug=conference_slug).distinct()
         return ConferencePermission.objects.none()
 
 
 class ConferenceMemberViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
-    """ViewSet for managing conference members"""
     serializer_class = ConferenceMemberSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -375,13 +395,17 @@ class ConferenceMemberViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
     def get_queryset(self):
         conference = self.kwargs.get('conference_slug')
         if conference:
-            return ConferenceMember.objects.select_related('user', 'role').filter(
-                conference__slug=conference
-            )
+            return ConferenceMember.objects.select_related('user', 'role').prefetch_related(
+                'direct_permissions', 'direct_permissions__permission'
+            ).filter(conference__slug=conference)
         return ConferenceMember.objects.none()
 
+    def get_serializer_class(self):
+        if self.action in ['retrieve', 'permissions', 'permissions_detail']:
+            return ConferenceMemberDetailSerializer
+        return ConferenceMemberSerializer
+
     def destroy(self, request, *args, **kwargs):
-        """Remove member"""
         member = self.get_object()
         conference = member.conference
 
@@ -395,10 +419,204 @@ class ConferenceMemberViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
 
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=['get'], url_path='permissions-detail')
+    def permissions(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        if not self.has_conference_permission('view_members', conference):
+            return Response(
+                {'detail': 'You do not have permission to view member details.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = ConferenceMemberDetailSerializer(member)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['put', 'patch'], url_path='permissions-update')
+    def update_permissions(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        membership = self.get_user_membership(conference)
+        if not membership or membership.role.role_type != 'secretary':
+            if not request.user.is_superuser:
+                return Response(
+                    {'detail': 'Only conference secretary can manage member permissions.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        if member.role.role_type == 'secretary' and member.user != request.user:
+            return Response(
+                {'detail': 'Cannot modify secretary permissions.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = MemberPermissionUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.update_permissions(member, granted_by=request.user)
+
+            member.refresh_from_db()
+            return Response({
+                'detail': 'Permissions updated successfully.',
+                'member': ConferenceMemberDetailSerializer(member).data
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='permissions-grant')
+    def grant_permission(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        membership = self.get_user_membership(conference)
+        if not membership or membership.role.role_type != 'secretary':
+            if not request.user.is_superuser:
+                return Response(
+                    {'detail': 'Only conference secretary can grant permissions.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        serializer = MemberPermissionGrantSerializer(data=request.data)
+        if serializer.is_valid():
+            permission_id = serializer.validated_data['permission_id']
+            reason = serializer.validated_data.get('reason', '')
+
+            permission = ConferencePermission.objects.get(id=permission_id)
+            ConferenceMemberPermission.objects.update_or_create(
+                member=member,
+                permission=permission,
+                defaults={
+                    'is_revoked': False,
+                    'granted_by': request.user,
+                    'reason': reason
+                }
+            )
+
+            return Response({
+                'detail': f'Permission "{permission.name}" granted successfully.',
+                'effective_permissions': list(member.get_permissions().values_list('codename', flat=True))
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='permissions-revoke')
+    def revoke_permission(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        membership = self.get_user_membership(conference)
+        if not membership or membership.role.role_type != 'secretary':
+            if not request.user.is_superuser:
+                return Response(
+                    {'detail': 'Only conference secretary can revoke permissions.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        serializer = MemberPermissionRevokeSerializer(data=request.data)
+        if serializer.is_valid():
+            permission_id = serializer.validated_data['permission_id']
+            reason = serializer.validated_data.get('reason', '')
+
+            permission = ConferencePermission.objects.get(id=permission_id)
+            ConferenceMemberPermission.objects.update_or_create(
+                member=member,
+                permission=permission,
+                defaults={
+                    'is_revoked': True,
+                    'granted_by': request.user,
+                    'reason': reason
+                }
+            )
+
+            return Response({
+                'detail': f'Permission "{permission.name}" revoked successfully.',
+                'effective_permissions': list(member.get_permissions().values_list('codename', flat=True))
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='permissions-reset')
+    def reset_permissions(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        membership = self.get_user_membership(conference)
+        if not membership or membership.role.role_type != 'secretary':
+            if not request.user.is_superuser:
+                return Response(
+                    {'detail': 'Only conference secretary can reset permissions.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        member.reset_permissions_to_role()
+
+        return Response({
+            'detail': 'All direct permissions removed. Member now uses role permissions only.',
+            'effective_permissions': list(member.get_permissions().values_list('codename', flat=True))
+        })
+
+    @action(detail=True, methods=['delete'], url_path='permissions-remove/(?P<permission_id>[^/.]+)')
+    def remove_direct_permission(self, request, pk=None, conference_slug=None, permission_id=None):
+        member = self.get_object()
+        conference = member.conference
+
+        membership = self.get_user_membership(conference)
+        if not membership or membership.role.role_type != 'secretary':
+            if not request.user.is_superuser:
+                return Response(
+                    {'detail': 'Only conference secretary can remove direct permissions.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        try:
+            permission = ConferencePermission.objects.get(id=permission_id)
+            deleted, _ = member.direct_permissions.filter(
+                permission=permission).delete()
+
+            if deleted:
+                return Response({
+                    'detail': f'Direct permission assignment for "{permission.name}" removed.',
+                    'effective_permissions': list(member.get_permissions().values_list('codename', flat=True))
+                })
+            else:
+                return Response(
+                    {'detail': 'No direct permission assignment found.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except ConferencePermission.DoesNotExist:
+            return Response(
+                {'detail': 'Permission not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['get'], url_path='permissions-direct')
+    def list_direct_permissions(self, request, pk=None, conference_slug=None):
+        member = self.get_object()
+        conference = member.conference
+
+        if not self.has_conference_permission('view_members', conference):
+            return Response(
+                {'detail': 'You do not have permission to view member details.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        direct_perms = member.direct_permissions.select_related(
+            'permission', 'granted_by').all()
+        serializer = ConferenceMemberPermissionSerializer(
+            direct_perms, many=True)
+
+        return Response({
+            'member_id': member.id,
+            'member_username': member.user.username,
+            'direct_permissions': serializer.data,
+            'granted_count': direct_perms.filter(is_revoked=False).count(),
+            'revoked_count': direct_perms.filter(is_revoked=True).count()
+        })
+
 
 class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet):
-    """ViewSet for managing conference invitations"""
-    serializer_class = ConferenceInvitationSerializer
+    serializer_class = ConferenceInvitationWithPermissionsSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status']
@@ -410,7 +628,7 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
         if conference_slug:
             return ConferenceInvitation.objects.select_related(
                 'invited_user', 'invited_by', 'role', 'conference'
-            ).filter(conference__slug=conference_slug)
+            ).prefetch_related('custom_permissions').filter(conference__slug=conference_slug)
         return ConferenceInvitation.objects.none()
 
     def perform_create(self, serializer):
@@ -419,11 +637,13 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
 
         expires_at = timezone.now() + timezone.timedelta(days=7)
 
-        serializer.save(
+        invitation = serializer.save(
             conference=conference,
             invited_by=self.request.user,
             expires_at=expires_at
         )
+
+        self._send_invitation_notification(invitation)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -433,9 +653,119 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
             context['conference'] = conference
         return context
 
+    def _send_invitation_notification(self, invitation):
+        try:
+            tokens = list(
+                invitation.invited_user.fcm_devices.filter(
+                    is_active=True
+                ).values_list('device_token', flat=True)
+            )
+
+            if tokens:
+                fcm_service.send_invitation_notification(
+                    user_tokens=tokens,
+                    inviter_name=invitation.invited_by.get_full_name() or invitation.invited_by.username,
+                    conference_name=invitation.conference.name,
+                    invitation_id=invitation.id
+                )
+                logger.info(
+                    f"Invitation notification sent to {invitation.invited_user.username}"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to send invitation notification: {str(e)}"
+            )
+
+    @action(detail=True, methods=['post', 'get'], permission_classes=[IsAuthenticated])
+    def permissions(self, request, pk=None, conference_slug=None):
+        invitation = self.get_object()
+
+        conference = invitation.conference
+        if not self.has_conference_permission('invite_members', conference):
+            return Response(
+                {'detail': 'You do not have permission to manage invitation permissions.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if request.method == 'GET':
+            permissions = invitation.custom_permissions.all()
+            serializer = ConferencePermissionSerializer(
+                [p.permission for p in permissions],
+                many=True
+            )
+            return Response({
+                'invitation_id': invitation.id,
+                'permissions': serializer.data,
+                'permission_count': len(serializer.data)
+            })
+
+        elif request.method == 'POST':
+            permission_ids = request.data.get('permission_ids', [])
+
+            if not isinstance(permission_ids, list):
+                return Response(
+                    {'detail': 'permission_ids must be a list of integers.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                permissions = ConferencePermission.objects.filter(
+                    id__in=permission_ids)
+                if len(permissions) != len(permission_ids):
+                    return Response(
+                        {'detail': 'One or more permission IDs are invalid.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                invitation.custom_permissions.all().delete()
+                for permission in permissions:
+                    InvitationPermission.objects.create(
+                        invitation=invitation,
+                        permission=permission
+                    )
+
+                self._send_permissions_update_notification(
+                    invitation, permissions)
+
+                return Response({
+                    'detail': 'Invitation permissions updated successfully.',
+                    'permissions': ConferencePermissionSerializer(permissions, many=True).data,
+                    'permission_count': len(permissions)
+                }, status=status.HTTP_200_OK)
+
+            except Exception as e:
+                logger.error(
+                    f"Error updating invitation permissions: {str(e)}")
+                return Response(
+                    {'detail': f'Error updating permissions: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+    def _send_permissions_update_notification(self, invitation, permissions):
+        try:
+            tokens = list(
+                invitation.invited_user.fcm_devices.filter(
+                    is_active=True
+                ).values_list('device_token', flat=True)
+            )
+
+            if tokens:
+                permission_names = [p.name for p in permissions]
+                fcm_service.send_permission_update_notification(
+                    user_tokens=tokens,
+                    conference_name=invitation.conference.name,
+                    permissions=permission_names
+                )
+                logger.info(
+                    f"Permission update notification sent to {invitation.invited_user.username}"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to send permission update notification: {str(e)}"
+            )
+
     @action(detail=True, methods=['post'])
-    def accept(self, request, pk=None, conference_id=None):
-        """Accept an invitation"""
+    def accept(self, request, pk=None, conference_slug=None):
         invitation = self.get_object()
 
         if invitation.invited_user != request.user:
@@ -452,7 +782,7 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
-    def reject(self, request, pk=None, conference_id=None):
+    def reject(self, request, pk=None, conference_slug=None):
         """Reject an invitation"""
         invitation = self.get_object()
 
@@ -468,19 +798,17 @@ class ConferenceInvitationViewSet(ConferenceExecutiveRequiredMixin, ModelViewSet
 
 
 class UserInvitationViewSet(ModelViewSet):
-    """ViewSet for users to view their own invitations"""
-    serializer_class = ConferenceInvitationSerializer
+    serializer_class = ConferenceInvitationWithPermissionsSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post']
 
     def get_queryset(self):
         return ConferenceInvitation.objects.select_related(
             'conference', 'invited_by', 'role'
-        ).filter(invited_user=self.request.user)
+        ).prefetch_related('custom_permissions').filter(invited_user=self.request.user)
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
-        """Accept an invitation"""
         invitation = self.get_object()
 
         if invitation.invited_user != request.user:
@@ -498,7 +826,6 @@ class UserInvitationViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        """Reject an invitation"""
         invitation = self.get_object()
 
         if invitation.invited_user != request.user:
@@ -510,3 +837,70 @@ class UserInvitationViewSet(ModelViewSet):
             return Response({'detail': 'Invitation rejected successfully.'})
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserFCMDeviceViewSet(ModelViewSet):
+    serializer_class = UserFCMDeviceSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'put', 'delete']
+
+    def get_queryset(self):
+        return UserFCMDevice.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        device = self.get_object()
+        if device.user != self.request.user:
+            return Response(
+                {'detail': 'You can only update your own devices.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        device = self.get_object()
+        if device.user != request.user:
+            return Response(
+                {'detail': 'You can only activate your own devices.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        device.is_active = True
+        device.save()
+        return Response({'detail': 'Device activated.'})
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        device = self.get_object()
+        if device.user != request.user:
+            return Response(
+                {'detail': 'You can only deactivate your own devices.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        device.is_active = False
+        device.save()
+        return Response({'detail': 'Device deactivated.'})
+
+    @action(detail=False, methods=['post'])
+    def test_notification(self, request):
+        devices = self.get_queryset().filter(is_active=True)
+
+        if not devices.exists():
+            return Response(
+                {'detail': 'No active devices found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tokens = list(devices.values_list('device_token', flat=True))
+        result = fcm_service.send_multicast(
+            tokens=tokens,
+            title='تست نوتیفیکیشن 📬',
+            body='اگر این پیام را می‌بینید، FCM به درستی کار می‌کند!'
+        )
+
+        return Response({
+            'detail': 'Test notification sent.',
+            'result': result
+        })
