@@ -7,7 +7,10 @@ from django.core.exceptions import ValidationError
 from django.forms import ModelForm
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import Conference, ConferenceRole, ConferencePermission, ConferenceMember, ConferenceInvitation
+from .models import (
+    Conference, ConferenceRole, ConferencePermission, ConferenceMember,
+    ConferenceInvitation, InvitationPermission, UserFCMDevice, ConferenceMemberPermission
+)
 
 
 class ConferenceResource(resources.ModelResource):
@@ -350,23 +353,46 @@ class ConferenceRoleAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('conference').prefetch_related('permissions', 'members')
 
 
+class ConferenceMemberPermissionInline(admin.TabularInline):
+    """Inline admin for direct member permissions"""
+    model = ConferenceMemberPermission
+    extra = 0
+    fields = ('permission', 'is_revoked', 'granted_by', 'reason', 'created_at')
+    readonly_fields = ('created_at', 'granted_by')
+    autocomplete_fields = ('permission',)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('permission', 'granted_by')
+
+
 @admin.register(ConferenceMember)
 class ConferenceMemberAdmin(admin.ModelAdmin):
-    """Admin for conference members"""
+    """Admin for conference members with direct permission management"""
+    inlines = [ConferenceMemberPermissionInline]
     list_display = ('user', 'conference', 'get_role_info',
-                    'status', 'get_permissions_summary', 'joined_at')
+                    'status', 'get_permissions_summary', 'get_direct_permissions_count', 'joined_at')
     list_filter = ('status', 'role__role_type', 'joined_at', 'conference')
     search_fields = ('user__username', 'user__first_name',
                      'user__last_name', 'conference__name', 'role__name')
     autocomplete_fields = ('user', 'conference', 'role')
-    readonly_fields = ('joined_at', 'updated_at', 'get_permissions_summary')
+    readonly_fields = ('joined_at', 'updated_at', 'get_permissions_summary',
+                       'get_effective_permissions', 'get_direct_permissions_list')
 
     fieldsets = (
         ('Member Information', {
             'fields': ('user', 'conference', 'role', 'status')
         }),
-        ('Details', {
-            'fields': ('get_permissions_summary', 'joined_at', 'updated_at'),
+        ('Role Permissions', {
+            'fields': ('get_permissions_summary',),
+            'classes': ('collapse',)
+        }),
+        ('Effective Permissions', {
+            'fields': ('get_effective_permissions', 'get_direct_permissions_list'),
+            'classes': ('collapse',),
+            'description': 'Combined view of role and direct permissions'
+        }),
+        ('Timestamps', {
+            'fields': ('joined_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
@@ -384,13 +410,13 @@ class ConferenceMemberAdmin(admin.ModelAdmin):
     get_role_info.short_description = 'Role Type'
 
     def get_permissions_summary(self, obj):
-        """Display permissions for this member"""
+        """Display role permissions for this member"""
         if not obj.pk:
             return "Permissions will be shown after saving"
 
         permissions = obj.role.permissions.all()
         if not permissions:
-            return "No permissions assigned"
+            return "No role permissions assigned"
 
         permission_list = [p.name for p in permissions[:5]]
         if len(permissions) > 5:
@@ -398,10 +424,66 @@ class ConferenceMemberAdmin(admin.ModelAdmin):
 
         return mark_safe("<br>".join(permission_list))
 
-    get_permissions_summary.short_description = 'Permissions'
+    get_permissions_summary.short_description = 'Role Permissions'
+
+    def get_direct_permissions_count(self, obj):
+        """Display count of direct permissions"""
+        granted = obj.direct_permissions.filter(is_revoked=False).count()
+        revoked = obj.direct_permissions.filter(is_revoked=True).count()
+
+        if granted == 0 and revoked == 0:
+            return "-"
+
+        parts = []
+        if granted:
+            parts.append(f'<span style="color: green;">+{granted}</span>')
+        if revoked:
+            parts.append(f'<span style="color: red;">-{revoked}</span>')
+
+        return mark_safe(" / ".join(parts))
+
+    get_direct_permissions_count.short_description = 'Direct'
+
+    def get_effective_permissions(self, obj):
+        """Display all effective permissions"""
+        if not obj.pk:
+            return "Permissions will be shown after saving"
+
+        permissions = obj.get_permissions()
+        if not permissions:
+            return "No effective permissions"
+
+        return mark_safe("<br>".join([f"• {p.name}" for p in permissions]))
+
+    get_effective_permissions.short_description = 'All Effective Permissions'
+
+    def get_direct_permissions_list(self, obj):
+        """Display direct permission assignments with status"""
+        if not obj.pk:
+            return "Direct permissions will be shown after saving"
+
+        direct_perms = obj.direct_permissions.select_related(
+            'permission').all()
+        if not direct_perms:
+            return "No direct permissions assigned (using role permissions only)"
+
+        lines = []
+        for dp in direct_perms:
+            if dp.is_revoked:
+                lines.append(
+                    f'<span style="color: red;">✗ {dp.permission.name} (revoked)</span>')
+            else:
+                lines.append(
+                    f'<span style="color: green;">✓ {dp.permission.name} (granted)</span>')
+
+        return mark_safe("<br>".join(lines))
+
+    get_direct_permissions_list.short_description = 'Direct Permission Assignments'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user', 'conference', 'role').prefetch_related('role__permissions')
+        return super().get_queryset(request).select_related(
+            'user', 'conference', 'role'
+        ).prefetch_related('role__permissions', 'direct_permissions', 'direct_permissions__permission')
 
     def save_model(self, request, obj, form, change):
         try:
@@ -526,3 +608,98 @@ class ConferenceInvitationAdmin(admin.ModelAdmin):
             request, f"Extended expiry for {updated_count} invitations by 7 days.")
 
     extend_expiry.short_description = "Extend expiry by 7 days"
+
+
+class InvitationPermissionInline(admin.TabularInline):
+    """Inline admin for invitation permissions"""
+    model = InvitationPermission
+    extra = 0
+    fields = ('permission', 'granted_at')
+    readonly_fields = ('granted_at',)
+    raw_id_fields = ('permission',)
+
+
+@admin.register(InvitationPermission)
+class InvitationPermissionAdmin(admin.ModelAdmin):
+    """Admin for managing invitation permissions"""
+    list_display = ('id', 'get_invitation_display', 'permission', 'granted_at')
+    list_filter = ('granted_at', 'permission__codename')
+    search_fields = ('invitation__invited_user__username',
+                     'permission__codename')
+    readonly_fields = ('granted_at',)
+    raw_id_fields = ('invitation', 'permission')
+
+    def get_invitation_display(self, obj):
+        return f"{obj.invitation.invited_user.username} → {obj.invitation.conference.name}"
+    get_invitation_display.short_description = "Invitation"
+
+
+@admin.register(UserFCMDevice)
+class UserFCMDeviceAdmin(admin.ModelAdmin):
+    """Admin for managing user FCM devices"""
+    list_display = ('id', 'user', 'device_name', 'device_type',
+                    'is_active', 'created_at', 'last_used')
+    list_filter = ('device_type', 'is_active', 'created_at')
+    search_fields = ('user__username', 'device_name', 'device_token')
+    readonly_fields = ('device_token', 'created_at', 'updated_at', 'last_used')
+    fieldsets = (
+        ('User Info', {
+            'fields': ('user',)
+        }),
+        ('Device Details', {
+            'fields': ('device_name', 'device_type', 'device_token')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'last_used'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # Editing existing object
+            return self.readonly_fields + ('user', 'device_type')
+        return self.readonly_fields
+
+
+@admin.register(ConferenceMemberPermission)
+class ConferenceMemberPermissionAdmin(admin.ModelAdmin):
+    """Admin for managing direct member permissions"""
+    list_display = ('id', 'get_member_display', 'permission', 'get_status_display',
+                    'granted_by', 'created_at')
+    list_filter = ('is_revoked', 'permission__codename', 'created_at',
+                   'member__conference')
+    search_fields = ('member__user__username', 'permission__codename',
+                     'permission__name', 'member__conference__name')
+    readonly_fields = ('created_at', 'updated_at')
+    autocomplete_fields = ('member', 'permission', 'granted_by')
+
+    fieldsets = (
+        ('Permission Assignment', {
+            'fields': ('member', 'permission', 'is_revoked')
+        }),
+        ('Details', {
+            'fields': ('granted_by', 'reason')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_member_display(self, obj):
+        return f"{obj.member.user.username} ({obj.member.conference.name})"
+    get_member_display.short_description = "Member"
+
+    def get_status_display(self, obj):
+        if obj.is_revoked:
+            return mark_safe('<span style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">Revoked</span>')
+        return mark_safe('<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">Granted</span>')
+    get_status_display.short_description = "Status"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'member', 'member__user', 'member__conference', 'permission', 'granted_by'
+        )

@@ -183,10 +183,137 @@ class ConferenceMember(models.Model):
     def has_permission(self, permission_codename):
         if self.status != 'active':
             return False
+
+        try:
+            direct_permission = self.direct_permissions.select_related('permission').get(
+                permission__codename=permission_codename
+            )
+            if direct_permission.is_revoked:
+                return False
+            return True
+        except ConferenceMemberPermission.DoesNotExist:
+            pass
+
         return self.role.permissions.filter(codename=permission_codename).exists()
 
     def get_permissions(self):
+        """
+        Get all effective permissions for this member.
+        Combines role permissions with direct permissions, excluding revoked ones.
+        """
+        role_permission_ids = set(
+            self.role.permissions.values_list('id', flat=True))
+
+        # Get directly granted permissions
+        granted_ids = set(self.direct_permissions.filter(
+            is_revoked=False
+        ).values_list('permission_id', flat=True))
+
+        # Get revoked permissions
+        revoked_ids = set(self.direct_permissions.filter(
+            is_revoked=True
+        ).values_list('permission_id', flat=True))
+
+        # Combine: (role + granted) - revoked
+        effective_ids = (role_permission_ids | granted_ids) - revoked_ids
+
+        return ConferencePermission.objects.filter(id__in=effective_ids)
+
+    def get_role_permissions(self):
+        """Get only role-based permissions."""
         return self.role.permissions.all()
+
+    def get_direct_permissions(self):
+        return ConferencePermission.objects.filter(
+            member_permissions__member=self,
+            member_permissions__is_revoked=False
+        )
+
+    def get_revoked_permissions(self):
+        return ConferencePermission.objects.filter(
+            member_permissions__member=self,
+            member_permissions__is_revoked=True
+        )
+
+    def grant_permission(self, permission):
+        if isinstance(permission, str):
+            permission = ConferencePermission.objects.get(codename=permission)
+
+        obj, created = ConferenceMemberPermission.objects.update_or_create(
+            member=self,
+            permission=permission,
+            defaults={'is_revoked': False}
+        )
+        return obj
+
+    def revoke_permission(self, permission):
+        if isinstance(permission, str):
+            permission = ConferencePermission.objects.get(codename=permission)
+
+        obj, created = ConferenceMemberPermission.objects.update_or_create(
+            member=self,
+            permission=permission,
+            defaults={'is_revoked': True}
+        )
+        return obj
+
+    def remove_direct_permission(self, permission):
+        if isinstance(permission, str):
+            permission = ConferencePermission.objects.get(codename=permission)
+
+        self.direct_permissions.filter(permission=permission).delete()
+
+    def reset_permissions_to_role(self):
+        self.direct_permissions.all().delete()
+
+    def get_permissions_summary(self):
+        summary = []
+        all_permissions = ConferencePermission.objects.all()
+
+        role_perm_ids = set(self.role.permissions.values_list('id', flat=True))
+        direct_perms = {
+            dp.permission_id: dp
+            for dp in self.direct_permissions.select_related('permission').all()
+        }
+
+        for perm in all_permissions:
+            in_role = perm.id in role_perm_ids
+            direct = direct_perms.get(perm.id)
+
+            if direct:
+                if direct.is_revoked:
+                    status = 'revoked'
+                    source = 'direct'
+                    effective = False
+                else:
+                    status = 'granted'
+                    source = 'direct'
+                    effective = True
+            elif in_role:
+                status = 'granted'
+                source = 'role'
+                effective = True
+            else:
+                status = 'not_assigned'
+                source = None
+                effective = False
+
+            summary.append({
+                'permission': {
+                    'id': perm.id,
+                    'codename': perm.codename,
+                    'name': perm.name,
+                    'description': perm.description,
+                },
+                'status': status,
+                'source': source,
+                'effective': effective,
+                'in_role': in_role,
+                'is_direct': direct is not None,
+                'is_revoked': direct.is_revoked if direct else False,
+            })
+
+        return summary
 
     def get_status_message(self):
         if self.status == 'active':
@@ -199,6 +326,42 @@ class ConferenceMember(models.Model):
 
     def can_perform_actions(self):
         return self.status == 'active'
+
+
+class ConferenceMemberPermission(models.Model):
+    """
+    - is_revoked=False: Permission is explicitly granted (overrides role if not in role)
+    - is_revoked=True: Permission is explicitly revoked (overrides role permissions)
+    """
+    member = models.ForeignKey(
+        ConferenceMember, on_delete=models.CASCADE, related_name='direct_permissions')
+    permission = models.ForeignKey(
+        ConferencePermission, on_delete=models.CASCADE, related_name='member_permissions')
+    is_revoked = models.BooleanField(
+        default=False,
+        help_text='If True, this permission is explicitly revoked for this member, overriding role permissions'
+    )
+    granted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='granted_member_permissions',
+        help_text='User who granted/revoked this permission'
+    )
+    reason = models.TextField(
+        blank=True,
+        help_text='Optional reason for granting or revoking this permission'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Member Permission'
+        verbose_name_plural = 'Member Permissions'
+        unique_together = ['member', 'permission']
+        ordering = ['permission__codename']
+
+    def __str__(self):
+        action = 'revoked from' if self.is_revoked else 'granted to'
+        return f"{self.permission.codename} {action} {self.member.user.username}"
 
 
 class ConferenceInvitation(models.Model):
@@ -386,3 +549,46 @@ def create_default_roles_and_permissions(sender, instance, created, **kwargs):
                 conference=instance,
                 role=secretary_role
             )
+
+
+class InvitationPermission(models.Model):
+
+    invitation = models.ForeignKey(
+        ConferenceInvitation, on_delete=models.CASCADE, related_name='custom_permissions')
+    permission = models.ForeignKey(
+        ConferencePermission, on_delete=models.CASCADE)
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Invitation Permission'
+        verbose_name_plural = 'Invitation Permissions'
+        unique_together = ['invitation', 'permission']
+        ordering = ['permission__codename']
+
+    def __str__(self):
+        return f"{self.permission.codename} for {self.invitation}"
+
+
+class UserFCMDevice(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='fcm_devices')
+    device_token = models.TextField(unique=True, help_text='FCM device token')
+    device_name = models.CharField(
+        max_length=255, blank=True, help_text='Device name (e.g., "My iPhone")')
+    device_type = models.CharField(
+        max_length=20,
+        choices=[('ios', 'iOS'), ('android', 'Android'), ('web', 'Web')],
+        default='android'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'User FCM Device'
+        verbose_name_plural = 'User FCM Devices'
+        ordering = ['-last_used', '-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name or self.device_type}"
