@@ -5,19 +5,22 @@ from .models import Conference, ConferenceMember
 
 
 class ConferencePermissionMixin:
-    """
-    Mixin to handle conference-specific permission checking in views.
 
-    This mixin provides methods to check if the current user has specific
-    permissions within a conference context.
-    """
     conference_lookup_field = 'conference_id'
     permission_required = None
 
     def get_conference(self):
-        """Get the conference object for permission checking"""
         conference_id = self.kwargs.get(self.conference_lookup_field)
-        if not conference_id:
+        conference_slug = self.kwargs.get('conference_slug')
+        conference_pk = self.kwargs.get('conference_pk')
+
+        if conference_slug:
+            return get_object_or_404(Conference, slug=conference_slug)
+        elif conference_pk:
+            return get_object_or_404(Conference, pk=conference_pk)
+        elif conference_id:
+            return get_object_or_404(Conference, pk=conference_id)
+        else:
             obj = getattr(self, 'object', None)
             if obj and hasattr(obj, 'conference'):
                 return obj.conference
@@ -27,10 +30,7 @@ class ConferencePermissionMixin:
                 raise ValueError(
                     "Unable to determine conference for permission checking")
 
-        return get_object_or_404(Conference, pk=conference_id)
-
     def get_user_membership(self, conference=None):
-        """Get the user's membership in the conference"""
         if not self.request.user.is_authenticated:
             return None
 
@@ -46,7 +46,6 @@ class ConferencePermissionMixin:
             return None
 
     def has_conference_permission(self, permission_codename, conference=None):
-        """Check if the current user has a specific permission in the conference"""
         if not self.request.user.is_authenticated:
             return False
 
@@ -65,9 +64,8 @@ class ConferencePermissionMixin:
         return membership.has_permission(permission_codename)
 
     def check_member_status(self, conference=None):
-        """Check member status"""
         if not self.request.user.is_authenticated:
-            raise PermissionDenied("Authentication required.")
+            return "Authentication required."
 
         if self.request.user.is_superuser:
             return None
@@ -90,7 +88,6 @@ class ConferencePermissionMixin:
         return None  # Member is active
 
     def check_conference_permission(self, permission_codename=None, conference=None):
-        """Check permission and raise PermissionDenied if not allowed"""
         permission = permission_codename or self.permission_required
 
         if not permission:
@@ -107,7 +104,6 @@ class ConferencePermissionMixin:
             )
 
     def dispatch(self, request, *args, **kwargs):
-        """Override dispatch to check permissions before processing the request"""
         if self.permission_required:
             self.check_conference_permission()
 
@@ -134,15 +130,15 @@ class ConferencePermissionMixin:
 
 
 class ConferenceSecretaryRequiredMixin(ConferencePermissionMixin):
-    """Mixin that requires user to be a conference secretary"""
 
-    def dispatch(self, request, *args, **kwargs):
-        """Check if user is secretary of the conference"""
+    def check_permissions(self, request):
+        super().check_permissions(request)
+
         if not request.user.is_authenticated:
             raise PermissionDenied("Authentication required.")
 
         if request.user.is_superuser:
-            return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
+            return
 
         conference = self.get_conference()
 
@@ -156,19 +152,17 @@ class ConferenceSecretaryRequiredMixin(ConferencePermissionMixin):
             raise PermissionDenied(
                 "Only conference secretary can access this resource.")
 
-        return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
-
 
 class ConferenceExecutiveRequiredMixin(ConferencePermissionMixin):
-    """Mixin that requires user to be a conference executive (secretary, deputy, or assistant)"""
 
-    def dispatch(self, request, *args, **kwargs):
-        """Check if user is an executive of the conference"""
+    def check_permissions(self, request):
+        super().check_permissions(request)
+
         if not request.user.is_authenticated:
             raise PermissionDenied("Authentication required.")
 
         if request.user.is_superuser:
-            return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
+            return
 
         conference = self.get_conference()
 
@@ -182,19 +176,17 @@ class ConferenceExecutiveRequiredMixin(ConferencePermissionMixin):
             raise PermissionDenied(
                 "Only conference executives can access this resource.")
 
-        return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
-
 
 class ConferenceMemberRequiredMixin(ConferencePermissionMixin):
-    """Mixin that requires user to be a member of the conference"""
 
-    def dispatch(self, request, *args, **kwargs):
-        """Check if user is a member of the conference"""
+    def check_permissions(self, request):
+        super().check_permissions(request)
+
         if not request.user.is_authenticated:
             raise PermissionDenied("Authentication required.")
 
         if request.user.is_superuser:
-            return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
+            return
 
         conference = self.get_conference()
 
@@ -208,18 +200,8 @@ class ConferenceMemberRequiredMixin(ConferencePermissionMixin):
             raise PermissionDenied(
                 "Only conference members can access this resource.")
 
-        return super(ConferencePermissionMixin, self).dispatch(request, *args, **kwargs)
-
 
 def conference_permission_required(permission_codename, conference_lookup='conference_id'):
-    """
-    Decorator for function-based views to check conference permissions.
-
-    Usage:
-        @conference_permission_required('edit_conference')
-        def my_view(request, conference_id):
-            # view logic here
-    """
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
@@ -265,7 +247,6 @@ def conference_permission_required(permission_codename, conference_lookup='confe
 
 
 def conference_secretary_required(conference_lookup='conference_id'):
-    """Decorator that requires user to be conference secretary"""
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
@@ -312,7 +293,6 @@ def conference_secretary_required(conference_lookup='conference_id'):
 
 
 def conference_executive_required(conference_lookup='conference_id'):
-    """Decorator that requires user to be conference executive"""
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
