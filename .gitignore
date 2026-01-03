@@ -92,3 +92,6 @@ venv/
 !**/migrations
 !**/migrations/__init__.py
 db.sqlite3
+
+### Firebase ###
+hn-mangement-firebase-adminsdk-fbsvc-18c28e836b.json

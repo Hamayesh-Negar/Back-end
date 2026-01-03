@@ -8,8 +8,10 @@ router = routers.DefaultRouter()
 
 router.register(
     r'conferences', conference.views.ConferenceViewSet, basename='conference')
-router.register(r'my_invitations',
-                conference.views.UserInvitationViewSet, basename='user-invitations')
+router.register(
+    r'my_invitations', conference.views.UserInvitationViewSet, basename='user-invitations')
+router.register(
+    r'fcm_devices', conference.views.UserFCMDeviceViewSet, basename='fcm-devices')
 
 conference_router = routers.NestedDefaultRouter(
     router, r'conferences', lookup='conference')
